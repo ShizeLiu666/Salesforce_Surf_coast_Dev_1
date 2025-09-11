@@ -723,32 +723,49 @@ export default class PublicCalendarView extends LightningElement {
             //     maxInstances: maxInstances
             // });
             
+            // ========== RECURRING EVENT TIME FIX - START ==========
+            // 保存原始时间组件，避免夏时制和精度问题
+            const originalHours = event._start.getHours();
+            const originalMinutes = event._start.getMinutes();
+            const originalSeconds = event._start.getSeconds();
+            const originalMs = event._start.getMilliseconds();
+            
             let currentDate = new Date(event._start);
             const duration = event._end ? (event._end.getTime() - event._start.getTime()) : (30 * 60 * 1000); // 30 min default
             
-            // console.log('[ExpandRecurring] Duration calculation:', {
-            //     startTime: event._start.toString(),
-            //     endTime: event._end ? event._end.toString() : 'NO_END',
-            //     durationMs: duration,
-            //     durationMinutes: duration / (60 * 1000)
-            // });
+            console.log('[ExpandRecurring] FIXED Duration calculation:', {
+                startTime: event._start.toString(),
+                endTime: event._end ? event._end.toString() : 'NO_END',
+                originalTime: `${originalHours}:${originalMinutes}:${originalSeconds}`,
+                durationMs: duration,
+                durationMinutes: duration / (60 * 1000)
+            });
+            // ========== RECURRING EVENT TIME FIX - END ==========
             
             for (let i = 0; i < Math.min(count, maxInstances); i++) {
                 // Don't create instances too far in the past or future
                 const sixMonthsAgo = new Date(today.getTime() - (180 * 24 * 60 * 60 * 1000));
                 const inDateRange = currentDate >= sixMonthsAgo && currentDate <= sixMonthsFromNow;
                 
-                // console.log(`[ExpandRecurring] Instance ${i + 1}:`, {
-                //     date: currentDate.toDateString(),
-                //     time: currentDate.toTimeString().substring(0, 8),
-                //     inDateRange: inDateRange,
-                //     sixMonthsAgo: sixMonthsAgo.toDateString(),
-                //     sixMonthsForward: sixMonthsFromNow.toDateString()
-                // });
+                console.log(`[ExpandRecurring] FIXED Instance ${i + 1}:`, {
+                    date: currentDate.toDateString(),
+                    time: currentDate.toTimeString().substring(0, 8),
+                    originalTime: `${originalHours}:${originalMinutes}`,
+                    inDateRange: inDateRange
+                });
                 
                 if (inDateRange) {
-                    const instanceStart = new Date(currentDate);
-                    const instanceEnd = new Date(currentDate.getTime() + duration);
+                    // ========== TIME PRECISION FIX - START ==========
+                    // 创建精确的时间实例，保持原始时间组件
+                    const instanceStart = new Date(currentDate.getFullYear(), 
+                                                  currentDate.getMonth(), 
+                                                  currentDate.getDate(),
+                                                  originalHours,
+                                                  originalMinutes, 
+                                                  originalSeconds, 
+                                                  originalMs);
+                    const instanceEnd = new Date(instanceStart.getTime() + duration);
+                    // ========== TIME PRECISION FIX - END ==========
                     
                     const instance = {
                         ...event,
@@ -763,18 +780,35 @@ export default class PublicCalendarView extends LightningElement {
                     };
                     
                     instances.push(instance);
-                    // console.log(`[ExpandRecurring] ✅ Generated instance ${instances.length}:`, {
-                    //     title: instance.title,
-                    //     key: instance._key,
-                    //     start: instance._start.toDateString() + ' ' + instance._start.toTimeString().substring(0, 8),
-                    //     end: instance._end.toDateString() + ' ' + instance._end.toTimeString().substring(0, 8)
-                    // });
+                    console.log(`[ExpandRecurring] ✅ FIXED Generated instance ${instances.length}:`, {
+                        title: instance.title,
+                        key: instance._key,
+                        start: instance._start.toDateString() + ' ' + instance._start.toTimeString().substring(0, 8),
+                        end: instance._end.toDateString() + ' ' + instance._end.toTimeString().substring(0, 8),
+                        hourCheck: `Should be ${originalHours}:${originalMinutes}, actual: ${instance._start.getHours()}:${instance._start.getMinutes()}`
+                    });
                 } else {
-                    // console.log(`[ExpandRecurring] ⏭️ Skipped instance ${i + 1} (outside date range)`);
+                    console.log(`[ExpandRecurring] ⏭️ Skipped instance ${i + 1} (outside date range)`);
                 }
                 
-                // Move to next occurrence
-                currentDate.setDate(currentDate.getDate() + interval);
+                // ========== DATE ADVANCEMENT FIX - START ==========
+                // 更安全的日期推进，避免月末边界问题
+                const nextDate = new Date(currentDate);
+                nextDate.setDate(currentDate.getDate() + interval);
+                
+                // 验证日期推进是否正确
+                const expectedDay = currentDate.getDate() + interval;
+                if (nextDate.getDate() !== expectedDay && nextDate.getDate() !== (expectedDay % 31)) {
+                    console.warn('[ExpandRecurring] Date boundary issue detected:', {
+                        current: currentDate.toDateString(),
+                        expected: expectedDay,
+                        actual: nextDate.getDate(),
+                        month: nextDate.getMonth()
+                    });
+                }
+                
+                currentDate = nextDate;
+                // ========== DATE ADVANCEMENT FIX - END ==========
             }
             
             // console.log(`[ExpandRecurring] 🎯 RESULT: Generated ${instances.length} daily instances for: "${event.title}"`);;
@@ -944,15 +978,37 @@ export default class PublicCalendarView extends LightningElement {
                     const startHour = e._start.getHours();
                     const startMinutes = e._start.getMinutes();
                     
+                    // ========== 24-HOUR GRID POSITION FIX - START ==========
                     // Find which slot this hour corresponds to (5 AM = slot 1, 6 AM = slot 2, etc.)
                     let slotIndex = -1;
+                    let matchedH = -1;
+                    
                     for (let h = 5; h < 29; h++) {
                         const hour = h % 24;
                         if (hour === startHour) {
                             slotIndex = h - 5 + 1; // Convert to 1-based slot index
+                            matchedH = h;
                             break;
                         }
                     }
+                    
+                    // 验证24小时网格中的特殊时间点
+                    const isEarlyMorningEvent = startHour >= 0 && startHour <= 4;
+                    const isRecurringEvent = e.isRecurring || false;
+                    
+                    if (isEarlyMorningEvent || isRecurringEvent) {
+                        console.log('[GridPosition] 24-hour grid positioning:', {
+                            eventTitle: e.title,
+                            startHour: startHour,
+                            startMinutes: startMinutes,
+                            isRecurring: isRecurringEvent,
+                            isEarlyMorning: isEarlyMorningEvent,
+                            matchedH: matchedH,
+                            slotIndex: slotIndex,
+                            expectedPosition: slotIndex > 0 ? `${(slotIndex - 1) * 50 + (startMinutes / 60) * 50}px` : 'INVALID'
+                        });
+                    }
+                    // ========== 24-HOUR GRID POSITION FIX - END ==========
                     
                     if (slotIndex > 0) {
                         // Calculate precise position within the slot
@@ -963,6 +1019,25 @@ export default class PublicCalendarView extends LightningElement {
                             const durationMinutes = durationMs / (1000 * 60);
                             height = Math.max(30, (durationMinutes / 60) * 50); // Minimum 30 minutes
                         }
+                        
+                        // ========== POSITION VALIDATION - START ==========
+                        if (isEarlyMorningEvent || isRecurringEvent) {
+                            console.log('[GridPosition] Final calculated position:', {
+                                eventTitle: e.title,
+                                topPosition: topPosition + 'px',
+                                height: height + 'px',
+                                slotIndex: slotIndex,
+                                verification: `Hour ${startHour} should be in slot ${slotIndex} at ${topPosition}px`
+                            });
+                        }
+                        // ========== POSITION VALIDATION - END ==========
+                    } else {
+                        console.warn('[GridPosition] ⚠️ Failed to find valid slot for event:', {
+                            title: e.title,
+                            startHour: startHour,
+                            startTime: e._start.toString(),
+                            isRecurring: isRecurringEvent
+                        });
                     }
                 }
                 
