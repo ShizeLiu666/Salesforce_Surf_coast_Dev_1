@@ -1,0 +1,219 @@
+<template>
+    <div class={containerClass}>
+        <!-- Header -->
+        <div class="calendar-header">
+            <div class="header-left"><span>Calendar (dev test)</span></div>
+
+            <div class="header-center">
+                <div class="date-navigation">
+                    <button class="nav-button" onclick={handlePrevious}>
+                        <lightning-icon icon-name="utility:chevronleft" size="x-small"></lightning-icon>
+                    </button>
+                    <span class="current-range">{currentDateRange}</span>
+                    <button class="nav-button" onclick={handleNext}>
+                        <lightning-icon icon-name="utility:chevronright" size="x-small"></lightning-icon>
+                    </button>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="view-selector">
+                    <button class="view-toggle-button" onclick={handleViewToggle}>
+                        <lightning-icon icon-name="utility:event" size="x-small"></lightning-icon>
+                        <span>{currentViewLabel}</span>
+                        <lightning-icon icon-name="utility:down" size="x-small"></lightning-icon>
+                    </button>
+
+                    <div class={dropdownClass}>
+                        <template for:each={viewOptions} for:item="option">
+                            <div key={option.value}
+                                 class="dropdown-item"
+                                 data-view={option.value}
+                                 onclick={handleViewChange}>
+                                <lightning-icon icon-name={option.icon} size="x-small"></lightning-icon>
+                                <span>{option.label}</span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <template if:true={loading}>
+            <div class="loading-container">
+                <lightning-spinner alternative-text="Loading..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <!-- Error -->
+        <template if:true={error}>
+            <div class="error-container">
+                <div class="error-message">
+                    <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
+                    <span>{errorMessage}</span>
+                </div>
+            </div>
+        </template>
+
+        <!-- Calendar Content -->
+        <template if:false={loading}>
+            <template if:false={error}>
+
+                <!-- Week View -->
+                <template if:true={isWeekView}>
+                    <div class="week-view">
+                        <!-- Header row aligned with body gutter: [gutter | 7 day columns] -->
+                        <div class="week-header">
+                            <!-- header gutter cell -->
+                            <div class="week-header-cell" aria-hidden="true"></div>
+
+                            <!-- 7 day headers -->
+                            <template for:each={weekDays} for:item="day">
+                                <div key={day.dateStr} class="week-header-cell">
+                                    <div class="day-label">{day.dayNameShort}</div>
+                                    <template if:true={day.isToday}>
+                                        <div class="day-number today">{day.date}</div>
+                                    </template>
+                                    <template if:false={day.isToday}>
+                                        <div class="day-number">{day.date}</div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Body: [time gutter | 7×24 slot grid] -->
+                        <div class="week-body with-times">
+                            <!-- LEFT: time gutter (independent column) -->
+                            <div class="week-time-column">
+                                <template for:each={timeSlots} for:item="slot">
+                                    <div key={slot.value} class="time-slot">
+                                        <span class="time-label">{slot.label}</span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- RIGHT: 7 day columns × 24 hour slots grid -->
+                            <div class="week-days-grid">
+                                <template for:each={weekDays} for:item="day">
+                                    <div key={day.dateStr} class="week-day-column" data-col-index={day.colIndex}>
+                                        <!-- 24 hour slots for this day (background grid) -->
+                                        <template for:each={day.hourSlots} for:item="hourSlot">
+                                            <div key={hourSlot.hour} 
+                                                 class="hour-slot"
+                                                 data-hour={hourSlot.hour}
+                                                 data-day={day.dateStr}>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- All events for this day (positioned absolutely) -->
+                                        <template for:each={day.allEvents} for:item="event">
+                                            <div key={event._key}
+                                                 class="event-block grid-positioned"
+                                                 data-event-id={event._key}
+                                                 onclick={handleEventClick}
+                                                 title={event.title}>
+                                                <div class="event-time">{event.formattedStart}</div>
+                                                <div class="event-title">{event.title}</div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Month View -->
+                <template if:true={isMonthView}>
+                    <div class="month-view">
+                        <div class="month-header">
+                            <template for:each={dayNamesShort} for:item="day">
+                                <div key={day} class="month-header-cell">{day}</div>
+                            </template>
+                        </div>
+
+                        <div class="month-body">
+                            <template for:each={monthDays} for:item="week">
+                                <div key={week.weekNumber} class="month-week">
+                                    <template for:each={week.days} for:item="day">
+                                        <div key={day.dateStr} class={day.cssClass}>
+                                            <div class="month-day-number">{day.date}</div>
+                                            <div class="month-day-events">
+                                                <template for:each={day.events} for:item="event">
+                                                    <div key={event._key}
+                                                         class="month-event"
+                                                         data-event-id={event._key}
+                                                         onclick={handleEventClick}
+                                                         title={event.title}>
+                                                        {event.title}
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+            </template>
+        </template>
+
+        <!-- Custom Event Modal -->
+        <template if:true={showEventModal}>
+            <div class="event-modal-backdrop" onclick={handleCloseEventModal}>
+                <div class="event-modal" onclick={handleStopPropagation}>
+                    <div class="event-modal-header">
+                        <div class="event-modal-title">{selectedEvent.name}</div>
+                        <button class="event-modal-close" onclick={handleCloseEventModal}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
+                    </div>
+                    <div class="event-modal-content">
+                        <div class="event-detail-grid">
+                            <div class="detail-row">
+                                <div class="detail-label">Subject</div>
+                                <div class="detail-value">{selectedEvent.name}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Date &amp; Time</div>
+                                <div class="detail-value">{selectedEvent.dateTime}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Repeat event</div>
+                                <div class="detail-value">{selectedEvent.repeatText}</div>
+                            </div>
+                            <template if:true={selectedEvent.repeatDetails}>
+                                <div class="detail-row subtle">
+                                    <div class="detail-label">Recurring</div>
+                                    <div class="detail-value">{selectedEvent.repeatDetails}</div>
+                                </div>
+                            </template>
+                            <template if:true={selectedEvent.location}>
+                                <div class="detail-row">
+                                    <div class="detail-label">Location</div>
+                                    <div class="detail-value">{selectedEvent.location}</div>
+                                </div>
+                            </template>
+                            <template if:true={selectedEvent.type}>
+                                <div class="detail-row">
+                                    <div class="detail-label">Type</div>
+                                    <div class="detail-value">{selectedEvent.type}</div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <template if:true={selectedEvent.description}>
+                            <div class="event-modal-description">
+                                <div class="section-title">Description</div>
+                                <div class="description-text">{selectedEvent.description}</div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</template>

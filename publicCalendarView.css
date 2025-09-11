@@ -1,0 +1,676 @@
+/* Container */
+.calendar-wrapper {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    min-height: 600px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header */
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.header-left, .header-right {
+    flex: 1;
+}
+
+.header-center {
+    flex: 2;
+    text-align: center;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.calendar-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+/* Navigation */
+.date-navigation {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.nav-button {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.nav-button:hover {
+    background-color: #f3f4f6;
+}
+
+.current-range {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: #374151;
+    min-width: 200px;
+}
+
+/* Buttons */
+.today-button {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.today-button:hover {
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+}
+
+/* View Selector */
+.view-selector {
+    position: relative;
+}
+
+.view-toggle-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.view-toggle-button:hover {
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.view-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    min-width: 150px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s;
+    z-index: 1000;
+}
+
+.view-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.dropdown-item:hover {
+    background-color: #f3f4f6;
+}
+
+.dropdown-item:first-child {
+    border-radius: 6px 6px 0 0;
+}
+
+.dropdown-item:last-child {
+    border-radius: 0 0 6px 6px;
+}
+
+/* Week View */
+.week-view {
+    height: calc(100vh - 200px);
+    min-height: 600px; /* 确保最小高度 */
+    display: flex;
+    flex-direction: column;
+}
+
+.week-header {
+    display: grid;
+    grid-template-columns: 155px repeat(7, 1fr); /* first column matches time gutter width */
+    border-bottom: 1px solid #e5e7eb;
+    box-sizing: border-box;
+    padding-right: 14px; /* compensate body vertical scrollbar width on Windows to align columns */
+}
+
+.week-header-cell {
+    padding: 1rem;
+    text-align: center;
+    /* draw divider without affecting layout width to avoid cumulative rounding */
+    box-shadow: inset -1px 0 0 #f3f4f6;
+    box-sizing: border-box;
+}
+
+.week-header-cell:last-child { box-shadow: none; }
+
+.day-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+
+.day-number {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.day-number.today {
+    width: 2rem;
+    height: 2rem;
+    background-color: #3b82f6;
+    color: #ffffff;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.week-body {
+    display: grid;
+    grid-template-columns: 155px 1fr; /* keep in sync with .week-header first column */
+    flex: 1;
+    overflow-y: hidden; /* move vertical scrolling to .week-days-grid to avoid header/body width mismatch */
+}
+
+.week-time-column {
+    border-right: 1px solid #e5e7eb;
+    background-color: #fafafa;
+    width: 155px; /* fixed to align with header gutter */
+    overflow-y: hidden; /* 时间列不需要独立滚动，通过JS同步 */
+    position: relative;
+}
+
+.week-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    position: relative;
+    overflow-y: auto; /* scroll here so header can stay perfectly aligned with body */
+    min-width: 0; /* prevent child content from stretching columns */
+}
+
+.week-day-column {
+    /* draw divider without affecting layout width to avoid cumulative rounding */
+    box-shadow: inset -1px 0 0 #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    position: relative; /* Enable absolute positioning for events */
+    min-width: 0;
+    overflow: visible; /* Allow events to span beyond slot boundaries */
+    box-sizing: border-box;
+}
+
+.week-day-column:last-child { box-shadow: none; }
+
+/* Hour slots - each takes exactly 50px height to match time column */
+.hour-slot {
+    height: 50px;
+    border-bottom: 1px solid #f3f4f6; /* Lighter border */
+    position: relative;
+    padding: 1px; /* Reduced padding for better density */
+    overflow: visible; /* Allow events to be positioned precisely */
+    box-sizing: border-box; /* borders included in size */
+}
+
+/* Remove duplicate events - only show unique events */
+
+.hour-slot:last-child {
+    border-bottom: none;
+}
+
+/* Month View */
+.month-view {
+    padding: 0 1.5rem 1.5rem;
+}
+
+.month-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 0.5rem;
+}
+
+.month-header-cell {
+    padding: 0.75rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+
+.month-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.month-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+}
+
+.month-day {
+    border: 1px solid #f3f4f6;
+    border-radius: 6px;
+    padding: 0.5rem;
+    min-height: 100px;
+    background-color: #ffffff;
+    transition: all 0.2s;
+}
+
+.month-day:hover {
+    border-color: #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.month-day.today {
+    background-color: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.month-day.other-month {
+    background-color: #fafafa;
+}
+
+.month-day.other-month .month-day-number {
+    color: #d1d5db;
+}
+
+.month-day-number {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 0.25rem;
+}
+
+.month-day-events {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+/* Events */
+.event-block {
+    background-color: #60a5fa;
+    color: #ffffff;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.event-block.time-positioned {
+    position: absolute;
+    left: 0.5rem;
+    right: 0.5rem;
+    margin-bottom: 0;
+    z-index: 10;
+}
+
+/* New slot-based positioning */
+.event-block.slot-positioned {
+    flex: 1; /* equally share available width among concurrent events */
+    min-width: 0; /* allow text ellipsis to work */
+    height: calc(100% - 4px); /* fixed block height inside slot */
+    margin: 0; /* margin handled by parent gap */
+    padding: 4px 6px;
+    font-size: 11px;
+    line-height: 1.2;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+    cursor: default;
+}
+
+/* Grid-positioned events (absolute positioning within day column) */
+.event-block.grid-positioned {
+    /* Position and size set by inline style */
+    background-color: #60a5fa; /* 默认颜色，会被JS动态覆盖 */
+    color: #ffffff;
+    padding: 3px 5px; /* 增加内边距以提高可读性 */
+    font-size: 11px; /* 稍微增大字体 */
+    line-height: 1.3;
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.event-block.grid-positioned:hover {
+    /* 改进：保持原有颜色，只增加透明度效果 */
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.event-block.grid-positioned .event-time {
+    font-size: 10px; /* 增大字体 */
+    font-weight: 600;
+    opacity: 0.95;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.event-block.grid-positioned .event-title {
+    font-size: 10px; /* 增大字体 */
+    font-weight: 500;
+    opacity: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    display: block;
+}
+
+/* 针对较窄的事件块，优化显示 */
+.event-block.grid-positioned[style*="width: 1"] .event-time,
+.event-block.grid-positioned[style*="width: 2"] .event-time,
+.event-block.grid-positioned[style*="width: 3"] .event-time,
+.event-block.grid-positioned[style*="width: 4"] .event-time {
+    font-size: 9px;
+}
+
+.event-block.grid-positioned[style*="width: 1"] .event-title,
+.event-block.grid-positioned[style*="width: 2"] .event-title,
+.event-block.grid-positioned[style*="width: 3"] .event-title,
+.event-block.grid-positioned[style*="width: 4"] .event-title {
+    font-size: 9px;
+}
+
+/* 结束时间样式 */
+.event-block.grid-positioned .event-end-time {
+    font-size: 9px;
+    font-weight: 400;
+    opacity: 0.8;
+    margin-top: 1px;
+    display: block;
+}
+
+.event-block:hover {
+    background-color: #3b82f6;
+}
+
+.event-time {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.event-title {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+/* Compact text for slot-positioned events */
+.event-block.slot-positioned .event-time {
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.event-block.slot-positioned .event-title {
+    font-size: 10px;
+    opacity: 0.95;
+    white-space: nowrap;
+    overflow: hidden; /* truncate long titles */
+    text-overflow: ellipsis;
+}
+
+.month-event {
+    background-color: #60a5fa;
+    color: #ffffff;
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.2s;
+}
+
+.month-event:hover {
+    background-color: #3b82f6;
+}
+
+/* Loading & Error */
+.loading-container, .error-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+}
+
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #dc2626;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .header-left, .header-center, .header-right {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .header-right {
+        justify-content: center;
+    }
+    
+    .week-view {
+        height: auto;
+        overflow-x: auto;
+    }
+    
+    .week-header, .week-body {
+        min-width: 700px;
+    }
+    
+    .month-day {
+        min-height: 80px;
+        padding: 0.25rem;
+    }
+    
+    .month-event {
+        font-size: 0.625rem;
+    }
+}
+
+/* Additional week view layout for slot-based grid */
+.week-view .week-days-grid {
+    position: relative;
+}
+
+.week-view .week-day-column {
+    background: transparent;
+}
+
+/* Time slot styling */
+.time-slot {
+    height: 50px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fafafa;
+    width: 155px;
+}
+
+.time-slot:last-child {
+    border-bottom: none;
+}
+
+/* Custom Event Modal */
+.event-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.event-modal {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 300px;
+    max-width: 400px;
+    margin: 1rem;
+    overflow: hidden;
+}
+
+.event-modal-header {
+    background: #ffffff; /* changed to white */
+    color: #111827; /* neutral text */
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.event-modal-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.event-modal-close {
+    background: none;
+    border: none;
+    color: #6b7280; /* gray */
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.event-modal-close:hover {
+    background-color: #f3f4f6;
+}
+
+.event-modal-content {
+    padding: 1.25rem;
+}
+
+/* Details grid */
+.event-detail-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+.detail-row { display: grid; grid-template-columns: 120px 1fr; gap: 0.75rem; align-items: start; }
+.detail-row.subtle { color: #6b7280; }
+.detail-label { font-size: 0.825rem; font-weight: 600; color: #374151; }
+.detail-value { font-size: 0.9rem; color: #111827; overflow-wrap: anywhere; }
+.codeish { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.8rem; color: #374151; }
+.section-title { font-weight: 600; margin-bottom: 0.35rem; color: #374151; }
+.description-text { white-space: pre-wrap; line-height: 1.5; }
+
+/* Recurring Event Styles */
+.recurring-icon {
+    /* Use near-white so it reads well on blue event backgrounds */
+    color: rgba(255, 255, 255, 0.95);
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.recurring-icon-modal {
+    color: #10b981;
+}
+
+.event-modal-recurring {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    background-color: #ecfdf5;
+    border-radius: 6px;
+    border-left: 3px solid #10b981;
+}
+
+.recurring-text {
+    font-size: 0.875rem;
+    color: #065f46;
+    font-weight: 500;
+}
+
+.event-modal-location,
+.event-modal-type {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+
+.event-modal-description {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e5e7eb;
+    font-size: 0.875rem;
+    color: #374151;
+    line-height: 1.5;
+}
+
+/* Event title with recurring icon */
+.event-title {
+    display: flex;
+    align-items: center;
+    gap: 4px; /* a little more breathing room between icon and text */
+}
