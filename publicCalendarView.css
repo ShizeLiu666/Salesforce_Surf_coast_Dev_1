@@ -378,6 +378,10 @@
     transition: all 0.2s ease;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
+    
+    /* 优化布局支持 */
+    position: absolute;
+    box-sizing: border-box;
 }
 
 .event-block.grid-positioned:hover {
@@ -689,4 +693,92 @@
     display: flex;
     align-items: center;
     gap: 4px; /* a little more breathing room between icon and text */
+}
+
+/* ========== 动态布局优化样式 ========== */
+
+/* 动态布局事件的特殊样式 */
+.event-block.grid-positioned.dynamic-layout {
+    /* 动态布局事件的增强视觉效果 */
+    border-left: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.event-block.grid-positioned.dynamic-layout:hover {
+    /* 动态布局事件的悬停效果 */
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+    border-left-width: 3px;
+}
+
+/* 确保百分比宽度正确计算 */
+.event-block.grid-positioned[style*="%"] {
+    box-sizing: border-box;
+}
+
+/* 小事件的文字优化 */
+.event-block.grid-positioned[style*="width: 1"] .event-title,
+.event-block.grid-positioned[style*="width: 2"] .event-title {
+    font-size: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-block.grid-positioned[style*="width: 1"] .event-time,
+.event-block.grid-positioned[style*="width: 2"] .event-time {
+    font-size: 8px;
+    margin-bottom: 1px;
+}
+
+/* 非常窄的事件只显示标题 */
+.event-block.grid-positioned[style*="width: 1"] .event-time {
+    display: none; /* 太窄时隐藏时间 */
+}
+
+/* 调试模式样式 */
+.debug-mode .event-block.grid-positioned {
+    border: 2px solid #ff0000;
+    opacity: 0.8;
+}
+
+.debug-mode .event-block.grid-positioned::before {
+    content: attr(data-debug-info);
+    position: absolute;
+    top: -15px;
+    left: 0;
+    font-size: 8px;
+    color: #ff0000;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 1px 3px;
+    border-radius: 2px;
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+/* 簇边界可视化（调试用） */
+.debug-mode .cluster-0 { border-color: #ff0000; }
+.debug-mode .cluster-1 { border-color: #00ff00; }
+.debug-mode .cluster-2 { border-color: #0000ff; }
+.debug-mode .cluster-3 { border-color: #ffff00; }
+.debug-mode .cluster-4 { border-color: #ff00ff; }
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+    .event-block.grid-positioned {
+        padding: 2px 3px;
+        font-size: 10px;
+    }
+    
+    .event-block.grid-positioned .event-time {
+        font-size: 9px;
+    }
+    
+    .event-block.grid-positioned .event-title {
+        font-size: 9px;
+    }
+    
+    .event-block.grid-positioned.dynamic-layout {
+        border-left-width: 1px;
+    }
 }

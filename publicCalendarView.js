@@ -37,6 +37,17 @@ export default class PublicCalendarView extends LightningElement {
     @track isCurrentlyFetching = false;
     // ========== CACHE OPTIMIZATION - END ==========
 
+    // ========== DEBUG AND MONITORING - START ==========
+    @track debugMode = false;
+    @track performanceStats = {
+        lastLayoutTime: 0,
+        totalEvents: 0,
+        totalClusters: 0,
+        averageClusterSize: 0,
+        dynamicEventsCount: 0
+    };
+    // ========== DEBUG AND MONITORING - END ==========
+
     SLOT_HEIGHT_PX = 50; // px per hour (must match CSS .time-slot height)
 
     dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -55,6 +66,9 @@ export default class PublicCalendarView extends LightningElement {
         this.initializeCurrentWeekStart();
         this.buildTimeSlots();
         this.loadCalendarData();
+        
+        // 设置全局调试工具
+        this.setupGlobalDebugTools();
     }
 
     renderedCallback() {
@@ -108,13 +122,12 @@ export default class PublicCalendarView extends LightningElement {
     }
 
     applyGridPositioning() {
-        // Apply grid positioning styles to events with concurrent event layout
+        // Apply optimized positioning styles to events
         const eventElements = this.template.querySelectorAll('.grid-positioned');
         
-        // DEBUG: Track applyGridPositioning calls
-        console.log(`[ApplyGrid] Called with ${eventElements.length} event elements`);
+        console.log(`[OptimizedGrid] 应用新布局，共 ${eventElements.length} 个事件元素`);
         
-        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#06b6d4'];
         
         eventElements.forEach(eventElement => {
             const eventId = eventElement.dataset.eventId;
@@ -131,71 +144,90 @@ export default class PublicCalendarView extends LightningElement {
             }
             
             if (eventData) {
-                // Basic positioning
-                eventElement.style.position = 'absolute';
-                eventElement.style.top = `${eventData._topPosition}px`;
-                eventElement.style.height = `${eventData._height}px`;
-                eventElement.style.zIndex = '10';
-                
-                // Simple concurrent event layout - only solve overlap issues
-                if (eventData._totalInGroup !== undefined && eventData._totalInGroup > 1) {
-                    const containerWidth = eventElement.parentElement.clientWidth;
-                    const availableWidth = containerWidth;
-                    const eventWidth = Math.floor(availableWidth / eventData._totalInGroup);
-                    // Fix: use _columnIndex instead of _eventIndex
-                    const columnIndex = eventData._columnIndex !== undefined ? eventData._columnIndex : eventData._eventIndex;
-                    const leftPosition = columnIndex * eventWidth;
+                // 检查是否使用了新的优化算法
+                if (eventData._isOptimized) {
+                    console.log(`[OptimizedGrid] 应用优化布局: "${eventData.title}"`);
                     
-                    // DEBUG: Thu 11 positioning
-                    if (eventData.title && (eventData.title.includes('Kate testing') || eventData.title.includes('Call'))) {
-                        console.log('POSITIONING CALCULATION:');
-                        console.log(`Event: "${eventData.title}" (Key: ${eventData._key})`);
-                        console.log(`containerWidth: ${containerWidth}px`);
-                        console.log(`totalInGroup: ${eventData._totalInGroup}`);
-                        console.log(`eventIndex: ${eventData._eventIndex} (old)`);
-                        console.log(`columnIndex: ${columnIndex} (new - FIXED)`);
-                        console.log(`eventWidth: ${eventWidth}px (${containerWidth}/${eventData._totalInGroup})`);
-                        console.log(`leftPosition: ${leftPosition}px (${columnIndex} * ${eventWidth})`);
-                        console.log(`topPosition: ${eventData._topPosition}px`);
-                        console.log(`Element ID: ${eventElement.dataset.eventId}`);
-                        console.log('---');
+                    // 使用新算法计算的几何信息
+                    eventElement.style.position = 'absolute';
+                    eventElement.style.top = `${eventData._top || 0}px`;
+                    eventElement.style.height = `${eventData._height || 30}px`;
+                    eventElement.style.width = eventData._width || '100%';
+                    eventElement.style.left = eventData._left || '0%';
+                    eventElement.style.zIndex = '10';
+                    
+                    // 应用颜色（基于列索引）
+                    const colorIndex = eventData._colIndex !== undefined ? 
+                        eventData._colIndex % colors.length : 0;
+                    const color = colors[colorIndex];
+                    eventElement.style.setProperty('background-color', color, 'important');
+                    
+                    // 动态布局标识
+                    if (eventData._isDynamic) {
+                        eventElement.classList.add('dynamic-layout');
+                        eventElement.setAttribute('title', 
+                            `${eventData.title} (动态布局, ${eventData._segmentCount || 1} 个时间段)`
+                        );
                     }
                     
-                    // Basic positioning
-                    eventElement.style.left = `${leftPosition}px`;
-                    eventElement.style.width = `${eventWidth}px`;
-                    eventElement.style.right = 'auto';
-                    
-                    // Apply different colors
-                    if (eventData._colorIndex !== undefined) {
-                        const color = colors[eventData._colorIndex];
-                        eventElement.style.setProperty('background-color', color, 'important');
-                    }
-                    
-                    // Add special style class for recurring events
-                    if (eventData.isRecurring) {
-                        eventElement.classList.add('recurring-event');
+                    // 调试日志
+                    if (eventData.title && eventData.title.includes('Kate')) {
+                        console.log(`[OptimizedGrid] "${eventData.title}":`, {
+                            top: eventData._top,
+                            height: eventData._height,
+                            width: eventData._width,
+                            left: eventData._left,
+                            colIndex: eventData._colIndex,
+                            totalColumns: eventData._totalColumns,
+                            isDynamic: eventData._isDynamic,
+                            clusterIndex: eventData._clusterIndex
+                        });
                     }
                     
                 } else {
-                    // Single event - full width
-                    eventElement.style.left = '0px';
-                    eventElement.style.right = '0px';
-                    eventElement.style.width = 'auto';
+                    // 回退到旧算法（兼容性）
+                    console.log(`[OptimizedGrid] 回退旧算法: "${eventData.title}"`);
                     
-                    // Single event also applies color
-                    if (eventData._colorIndex !== undefined) {
-                        const color = colors[eventData._colorIndex];
+                    eventElement.style.position = 'absolute';
+                    eventElement.style.top = `${eventData._topPosition || 0}px`;
+                    eventElement.style.height = `${eventData._height || 30}px`;
+                    eventElement.style.zIndex = '10';
+                    
+                    if (eventData._totalInGroup !== undefined && eventData._totalInGroup > 1) {
+                        const containerWidth = eventElement.parentElement.clientWidth;
+                        const eventWidth = Math.floor(containerWidth / eventData._totalInGroup);
+                        const columnIndex = eventData._columnIndex !== undefined ? 
+                            eventData._columnIndex : eventData._eventIndex || 0;
+                        const leftPosition = columnIndex * eventWidth;
+                        
+                        eventElement.style.left = `${leftPosition}px`;
+                        eventElement.style.width = `${eventWidth}px`;
+                        
+                        if (eventData._colorIndex !== undefined) {
+                            const color = colors[eventData._colorIndex % colors.length];
+                            eventElement.style.setProperty('background-color', color, 'important');
+                        }
+                    } else {
+                        eventElement.style.left = '0px';
+                        eventElement.style.right = '0px';
+                        eventElement.style.width = 'auto';
+                        
+                        const color = colors[0];
                         eventElement.style.setProperty('background-color', color, 'important');
                     }
-                    
-                    // Add special style class for recurring events
-                    if (eventData.isRecurring) {
-                        eventElement.classList.add('recurring-event');
-                    }
                 }
+                
+                // 重复事件样式
+                if (eventData.isRecurring) {
+                    eventElement.classList.add('recurring-event');
+                }
+                
+            } else {
+                console.warn(`[OptimizedGrid] 未找到事件数据: ${eventId}`);
             }
         });
+        
+        console.log(`[OptimizedGrid] 布局应用完成`);
     }
 
     scrollTo4AM() {
@@ -999,8 +1031,18 @@ export default class PublicCalendarView extends LightningElement {
                 });
             });
             
-            // Second pass: detect overlaps and calculate layout
-            const processedEvents = this.calculateConcurrentEventLayout(rawEvents);
+            // ========== 使用新的优化布局算法 ==========
+            // Second pass: detect overlaps and calculate layout using optimized algorithm
+            console.log(`[NewAlgorithm] 开始处理 ${currentDate.toDateString()} 的 ${rawEvents.length} 个事件`);
+            
+            const processedEvents = this.calculateOptimizedEventLayout(rawEvents, {
+                enableDynamicFill: true,     // 启用动态占满空隙
+                pxPerMinute: this.SLOT_HEIGHT_PX / 60,  // 每分钟像素数 (50px/60min ≈ 0.83px/min)
+                minEventHeight: 30,          // 最小事件高度30px
+                columnGap: 4                 // 列间距4px
+            });
+            
+            console.log(`[NewAlgorithm] ${currentDate.toDateString()} 完成，输出 ${processedEvents.length} 个布局事件`);
             allEvents.push(...processedEvents);
 
             // SPECIAL DEBUG for Thu 11
@@ -1336,6 +1378,599 @@ export default class PublicCalendarView extends LightningElement {
         //     });
         // }
         return overlap;
+    }
+
+    // ========== 新的事件布局算法 ==========
+    // 路线：数据 → 几何 → 渲染
+    // 1. 按天分桶 → 2. 切成重叠簇 → 3. 簇内列分配 → 4. 几何计算 → 5. 渲染
+
+    /**
+     * 主入口：新的事件布局算法
+     * @param {Array} events - 单天内的事件列表
+     * @param {Object} options - 配置选项
+     * @returns {Array} 处理后的事件（包含布局信息）
+     */
+    calculateOptimizedEventLayout(events, options = {}) {
+        if (events.length === 0) return [];
+        
+        const startTime = performance.now();
+        
+        const {
+            enableDynamicFill = true,  // 是否启用动态占满空隙
+            pxPerMinute = 1,          // 每分钟像素数
+            minEventHeight = 20,       // 最小事件高度
+            columnGap = 2             // 列间距
+        } = options;
+
+        console.log(`[OptimizedLayout] 开始处理 ${events.length} 个事件`);
+
+        // Step 1: 数据预处理和排序
+        const sortedEvents = [...events].sort((a, b) => {
+            if (a._startTime === b._startTime) {
+                return a._endTime - b._endTime; // 同时开始的，短的在前
+            }
+            return a._startTime - b._startTime;
+        });
+
+        // Step 2: 检测重叠簇（使用Union-Find算法）
+        const clusters = this.detectOverlapClusters(sortedEvents);
+        console.log(`[OptimizedLayout] 检测到 ${clusters.length} 个重叠簇`);
+
+        // Step 3: 对每个簇进行区间分割列分配
+        const processedEvents = [];
+        let dynamicEventsCount = 0;
+        
+        clusters.forEach((cluster, clusterIndex) => {
+            console.log(`[OptimizedLayout] 处理簇 ${clusterIndex + 1}/${clusters.length}，包含 ${cluster.length} 个事件`);
+            
+            if (cluster.length === 1) {
+                // 单事件簇，直接分配
+                const event = cluster[0];
+                const layoutInfo = this.calculateEventGeometry(event, {
+                    colIndex: 0,
+                    totalColumns: 1,
+                    pxPerMinute,
+                    minEventHeight,
+                    columnGap
+                });
+                
+                processedEvents.push({
+                    ...event,
+                    ...layoutInfo,
+                    _clusterIndex: clusterIndex,
+                    _isOptimized: true
+                });
+            } else {
+                // 多事件簇，使用区间分割算法
+                const clusterLayout = this.assignColumnsWithIntervalPartitioning(
+                    cluster, { enableDynamicFill, pxPerMinute, minEventHeight, columnGap }
+                );
+                
+                clusterLayout.forEach(eventLayout => {
+                    processedEvents.push({
+                        ...eventLayout,
+                        _clusterIndex: clusterIndex,
+                        _isOptimized: true
+                    });
+                    
+                    if (eventLayout._isDynamic) {
+                        dynamicEventsCount++;
+                    }
+                });
+            }
+        });
+
+        // 性能统计
+        const endTime = performance.now();
+        const layoutTime = Math.round(endTime - startTime);
+        const averageClusterSize = clusters.length > 0 ? 
+            Math.round(events.length / clusters.length * 10) / 10 : 0;
+
+        // 更新性能统计
+        this.performanceStats = {
+            lastLayoutTime: layoutTime,
+            totalEvents: events.length,
+            totalClusters: clusters.length,
+            averageClusterSize: averageClusterSize,
+            dynamicEventsCount: dynamicEventsCount
+        };
+
+        console.log(`[OptimizedLayout] 完成，输出 ${processedEvents.length} 个布局事件`);
+        console.log(`[Performance] 布局耗时: ${layoutTime}ms, 平均簇大小: ${averageClusterSize}, 动态事件: ${dynamicEventsCount}/${events.length}`);
+        
+        // 调试模式下输出详细信息
+        if (this.debugMode) {
+            this.logDetailedDebugInfo(clusters, processedEvents);
+        }
+        
+        return processedEvents;
+    }
+
+    /**
+     * 检测重叠簇 - 使用Union-Find算法
+     * @param {Array} sortedEvents - 按开始时间排序的事件
+     * @returns {Array} 簇数组，每个簇包含重叠的事件
+     */
+    detectOverlapClusters(sortedEvents) {
+        if (sortedEvents.length <= 1) {
+            return sortedEvents.map(event => [event]);
+        }
+
+        // 初始化Union-Find数据结构
+        const parent = new Map();
+        const rank = new Map();
+        
+        sortedEvents.forEach((event, index) => {
+            parent.set(index, index);
+            rank.set(index, 0);
+        });
+
+        // Union-Find辅助函数
+        const find = (x) => {
+            if (parent.get(x) !== x) {
+                parent.set(x, find(parent.get(x))); // 路径压缩
+            }
+            return parent.get(x);
+        };
+
+        const union = (x, y) => {
+            const rootX = find(x);
+            const rootY = find(y);
+            
+            if (rootX !== rootY) {
+                // 按秩合并
+                if (rank.get(rootX) < rank.get(rootY)) {
+                    parent.set(rootX, rootY);
+                } else if (rank.get(rootX) > rank.get(rootY)) {
+                    parent.set(rootY, rootX);
+                } else {
+                    parent.set(rootY, rootX);
+                    rank.set(rootX, rank.get(rootX) + 1);
+                }
+            }
+        };
+
+        // 检测重叠关系并合并
+        for (let i = 0; i < sortedEvents.length; i++) {
+            for (let j = i + 1; j < sortedEvents.length; j++) {
+                const event1 = sortedEvents[i];
+                const event2 = sortedEvents[j];
+                
+                // 如果event2开始时间已经超过event1结束时间，后续事件都不会与event1重叠
+                if (event2._startTime >= event1._endTime) {
+                    break;
+                }
+                
+                if (this.eventsOverlap(event1, event2)) {
+                    union(i, j);
+                }
+            }
+        }
+
+        // 构建簇
+        const clusters = new Map();
+        sortedEvents.forEach((event, index) => {
+            const root = find(index);
+            if (!clusters.has(root)) {
+                clusters.set(root, []);
+            }
+            clusters.get(root).push(event);
+        });
+
+        return Array.from(clusters.values());
+    }
+
+    /**
+     * 区间分割列分配算法（Interval Partitioning）
+     * @param {Array} cluster - 簇内的重叠事件
+     * @param {Object} options - 配置选项
+     * @returns {Array} 包含布局信息的事件
+     */
+    assignColumnsWithIntervalPartitioning(cluster, options = {}) {
+        const { enableDynamicFill = true, pxPerMinute = 1, minEventHeight = 20, columnGap = 2 } = options;
+        
+        // 按开始时间排序（扫描线算法的前置条件）
+        const sortedCluster = [...cluster].sort((a, b) => {
+            if (a._startTime === b._startTime) {
+                return a._endTime - b._endTime;
+            }
+            return a._startTime - b._startTime;
+        });
+
+        // 小顶堆（优先队列）- 用于跟踪每列的结束时间
+        const columns = []; // 每个元素 {endTime, index}
+        const eventColumnMap = new Map();
+
+        // 扫描线算法
+        sortedCluster.forEach((event, eventIndex) => {
+            let assignedColumn = -1;
+
+            // 查找可复用的列（结束时间 <= 当前事件开始时间）
+            for (let i = 0; i < columns.length; i++) {
+                if (columns[i].endTime <= event._startTime) {
+                    assignedColumn = i;
+                    columns[i].endTime = event._endTime;
+                    break;
+                }
+            }
+
+            // 如果没有可复用列，创建新列
+            if (assignedColumn === -1) {
+                assignedColumn = columns.length;
+                columns.push({
+                    endTime: event._endTime,
+                    index: assignedColumn
+                });
+            }
+
+            eventColumnMap.set(event._key || event.title, assignedColumn);
+        });
+
+        const totalColumns = columns.length;
+        console.log(`[IntervalPartition] 簇需要 ${totalColumns} 列`);
+
+        // 计算几何信息
+        const layoutEvents = [];
+        
+        if (enableDynamicFill) {
+            // 启用动态占满：按时间区间重新计算宽度
+            const dynamicLayouts = this.calculateDynamicFillLayout(sortedCluster, eventColumnMap, {
+                totalColumns, pxPerMinute, minEventHeight, columnGap
+            });
+            layoutEvents.push(...dynamicLayouts);
+        } else {
+            // 标准布局：固定列宽
+            sortedCluster.forEach(event => {
+                const colIndex = eventColumnMap.get(event._key || event.title);
+                const layoutInfo = this.calculateEventGeometry(event, {
+                    colIndex,
+                    totalColumns,
+                    pxPerMinute,
+                    minEventHeight,
+                    columnGap
+                });
+                
+                layoutEvents.push({
+                    ...event,
+                    ...layoutInfo,
+                    _columnIndex: colIndex,
+                    _totalColumns: totalColumns
+                });
+            });
+        }
+
+        return layoutEvents;
+    }
+
+    /**
+     * 动态占满空隙算法
+     * @param {Array} sortedCluster - 排序后的簇事件
+     * @param {Map} eventColumnMap - 事件到列的映射
+     * @param {Object} config - 配置
+     * @returns {Array} 动态布局的事件
+     */
+    calculateDynamicFillLayout(sortedCluster, eventColumnMap, config) {
+        const { totalColumns, pxPerMinute, minEventHeight, columnGap } = config;
+        
+        // Step 1: 收集所有时间点
+        const timePoints = new Set();
+        sortedCluster.forEach(event => {
+            timePoints.add(event._startTime);
+            timePoints.add(event._endTime);
+        });
+        
+        const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
+        console.log(`[DynamicFill] 时间分割点: ${sortedTimePoints.length} 个`);
+
+        // Step 2: 为每个时间区间计算活跃事件和动态宽度
+        const timeSegments = [];
+        for (let i = 0; i < sortedTimePoints.length - 1; i++) {
+            const segmentStart = sortedTimePoints[i];
+            const segmentEnd = sortedTimePoints[i + 1];
+            const segmentMid = segmentStart + (segmentEnd - segmentStart) / 2;
+
+            // 找到在此区间内活跃的事件
+            const activeEvents = sortedCluster.filter(event => 
+                event._startTime <= segmentMid && event._endTime > segmentMid
+            );
+
+            if (activeEvents.length > 0) {
+                // 计算活跃列
+                const activeColumns = new Set();
+                activeEvents.forEach(event => {
+                    const colIndex = eventColumnMap.get(event._key || event.title);
+                    activeColumns.add(colIndex);
+                });
+
+                const activeCols = Array.from(activeColumns).sort((a, b) => a - b);
+                
+                timeSegments.push({
+                    start: segmentStart,
+                    end: segmentEnd,
+                    activeEvents,
+                    activeColumns: activeCols,
+                    activeColumnCount: activeCols.length
+                });
+            }
+        }
+
+        // Step 3: 为每个事件计算动态几何
+        const layoutEvents = [];
+        
+        sortedCluster.forEach(event => {
+            const colIndex = eventColumnMap.get(event._key || event.title);
+            
+            // 找到事件覆盖的所有时间段
+            const eventSegments = timeSegments.filter(segment => 
+                event._startTime < segment.end && event._endTime > segment.start
+            );
+
+            if (eventSegments.length === 0) {
+                // 回退到标准布局
+                const layoutInfo = this.calculateEventGeometry(event, {
+                    colIndex, totalColumns, pxPerMinute, minEventHeight, columnGap
+                });
+                layoutEvents.push({ ...event, ...layoutInfo });
+                return;
+            }
+
+            // 计算动态布局参数
+            let totalDynamicWidth = 0;
+            let weightedLeft = 0;
+            let segmentWeights = 0;
+
+            eventSegments.forEach(segment => {
+                const segmentDuration = segment.end - segment.start;
+                const eventStartInSegment = Math.max(event._startTime, segment.start);
+                const eventEndInSegment = Math.min(event._endTime, segment.end);
+                const eventDurationInSegment = eventEndInSegment - eventStartInSegment;
+                
+                if (eventDurationInSegment > 0) {
+                    const weight = eventDurationInSegment / segmentDuration;
+                    const activeColumnIndex = segment.activeColumns.indexOf(colIndex);
+                    const dynamicWidth = 100 / segment.activeColumnCount; // 百分比
+                    const dynamicLeft = activeColumnIndex * dynamicWidth;
+                    
+                    totalDynamicWidth += dynamicWidth * weight;
+                    weightedLeft += dynamicLeft * weight;
+                    segmentWeights += weight;
+                }
+            });
+
+            // 加权平均
+            const avgWidth = segmentWeights > 0 ? totalDynamicWidth / segmentWeights : (100 / totalColumns);
+            const avgLeft = segmentWeights > 0 ? weightedLeft / segmentWeights : ((colIndex / totalColumns) * 100);
+
+            // 计算几何信息
+            const layoutInfo = this.calculateEventGeometry(event, {
+                colIndex,
+                totalColumns,
+                pxPerMinute,
+                minEventHeight,
+                columnGap,
+                dynamicWidth: avgWidth,
+                dynamicLeft: avgLeft
+            });
+
+            layoutEvents.push({
+                ...event,
+                ...layoutInfo,
+                _columnIndex: colIndex,
+                _totalColumns: totalColumns,
+                _isDynamic: true,
+                _segmentCount: eventSegments.length
+            });
+        });
+
+        return layoutEvents;
+    }
+
+    /**
+     * 几何计算：时间到像素转换
+     * @param {Object} event - 事件对象
+     * @param {Object} params - 布局参数
+     * @returns {Object} 几何信息
+     */
+    calculateEventGeometry(event, params) {
+        const {
+            colIndex,
+            totalColumns,
+            pxPerMinute = 1,
+            minEventHeight = 20,
+            columnGap = 2,
+            dynamicWidth = null,
+            dynamicLeft = null
+        } = params;
+
+        // 时间转像素
+        const startMinutes = event._startTime ? this.timeToMinutes(new Date(event._startTime)) : 0;
+        const endMinutes = event._endTime ? this.timeToMinutes(new Date(event._endTime)) : startMinutes + 30;
+        
+        const top = startMinutes * pxPerMinute;
+        const height = Math.max(minEventHeight, (endMinutes - startMinutes) * pxPerMinute);
+
+        // 宽度和位置计算
+        let width, left;
+        
+        if (dynamicWidth !== null && dynamicLeft !== null) {
+            // 动态宽度
+            width = `${dynamicWidth}%`;
+            left = `${dynamicLeft}%`;
+        } else {
+            // 固定宽度
+            const columnWidth = (100 - (totalColumns - 1) * (columnGap / totalColumns)) / totalColumns;
+            width = `${columnWidth}%`;
+            left = `${colIndex * (columnWidth + columnGap / totalColumns)}%`;
+        }
+
+        return {
+            _top: top,
+            _height: height,
+            _width: width,
+            _left: left,
+            _colIndex: colIndex,
+            _totalColumns: totalColumns
+        };
+    }
+
+    /**
+     * 将时间转换为分钟数（从一天开始计算）
+     * @param {Date} date - 时间对象
+     * @returns {number} 分钟数
+     */
+    timeToMinutes(date) {
+        return date.getHours() * 60 + date.getMinutes();
+    }
+
+    /**
+     * 详细调试信息输出
+     * @param {Array} clusters - 簇数组
+     * @param {Array} processedEvents - 处理后的事件
+     */
+    logDetailedDebugInfo(clusters, processedEvents) {
+        console.group('[DebugInfo] 详细调试信息');
+        
+        // 簇信息
+        console.log('📊 簇分析:');
+        clusters.forEach((cluster, index) => {
+            console.log(`  簇 ${index}: ${cluster.length} 个事件`);
+            cluster.forEach(event => {
+                console.log(`    - "${event.title}": ${new Date(event._startTime).toLocaleTimeString()} - ${new Date(event._endTime).toLocaleTimeString()}`);
+            });
+        });
+
+        // 布局结果
+        console.log('🎨 布局结果:');
+        processedEvents.forEach(event => {
+            console.log(`  "${event.title}":`, {
+                cluster: event._clusterIndex,
+                column: event._colIndex,
+                totalCols: event._totalColumns,
+                dynamic: event._isDynamic,
+                geometry: {
+                    top: event._top,
+                    height: event._height,
+                    left: event._left,
+                    width: event._width
+                }
+            });
+        });
+
+        console.groupEnd();
+    }
+
+    /**
+     * 切换调试模式
+     */
+    toggleDebugMode() {
+        this.debugMode = !this.debugMode;
+        console.log(`[Debug] 调试模式: ${this.debugMode ? '开启' : '关闭'}`);
+        
+        // 添加或移除调试CSS类
+        const calendarElement = this.template.querySelector('.calendar-wrapper');
+        if (calendarElement) {
+            if (this.debugMode) {
+                calendarElement.classList.add('debug-mode');
+            } else {
+                calendarElement.classList.remove('debug-mode');
+            }
+        }
+        
+        // 重新渲染视图以应用调试样式
+        this.refreshView();
+        
+        return this.debugMode;
+    }
+
+    /**
+     * 获取性能统计信息
+     */
+    getPerformanceStats() {
+        return {
+            ...this.performanceStats,
+            cacheHitRate: this.cacheTimestamp ? '有缓存' : '无缓存',
+            debugMode: this.debugMode,
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
+     * 设置全局调试工具
+     */
+    setupGlobalDebugTools() {
+        // 将调试方法暴露到全局window对象，方便开发者控制台调用
+        if (typeof window !== 'undefined') {
+            // 创建全局调试对象
+            window.calendarDebug = {
+                // 切换调试模式
+                toggleDebug: () => this.toggleDebugMode(),
+                
+                // 获取性能统计
+                getStats: () => this.getPerformanceStats(),
+                
+                // 手动触发重新布局
+                reLayout: () => {
+                    console.log('[Debug] 手动触发重新布局');
+                    this.refreshView();
+                },
+                
+                // 显示当前事件数据
+                showEvents: () => {
+                    console.group('[Debug] 当前事件数据');
+                    this.weekDays.forEach((day, index) => {
+                        console.log(`第${index + 1}天 (${day.dateStr}): ${day.allEvents.length} 个事件`);
+                        day.allEvents.forEach(event => {
+                            console.log(`  - "${event.title}": 簇${event._clusterIndex || 'N/A'}, 列${event._colIndex || 'N/A'}${event._isDynamic ? ' (动态)' : ''}`);
+                        });
+                    });
+                    console.groupEnd();
+                },
+                
+                // 设置调试参数
+                setDebugMode: (mode) => {
+                    this.debugMode = mode;
+                    const calendarElement = this.template.querySelector('.calendar-wrapper');
+                    if (calendarElement) {
+                        if (mode) {
+                            calendarElement.classList.add('debug-mode');
+                        } else {
+                            calendarElement.classList.remove('debug-mode');
+                        }
+                    }
+                    console.log(`[Debug] 调试模式设置为: ${mode}`);
+                },
+                
+                // 测试不同布局算法
+                testAlgorithm: (enableDynamicFill = true) => {
+                    console.log(`[Debug] 测试算法，动态占满: ${enableDynamicFill}`);
+                    // 重新构建当前视图
+                    this.buildWeekView();
+                },
+                
+                // 获取帮助信息
+                help: () => {
+                    console.log(`
+🔧 日历调试工具帮助
+
+可用命令：
+  calendarDebug.toggleDebug()     - 切换调试模式
+  calendarDebug.getStats()        - 获取性能统计
+  calendarDebug.reLayout()        - 手动重新布局
+  calendarDebug.showEvents()      - 显示当前事件数据
+  calendarDebug.setDebugMode(true/false) - 设置调试模式
+  calendarDebug.testAlgorithm(true/false) - 测试算法
+  calendarDebug.help()            - 显示此帮助信息
+
+示例：
+  calendarDebug.toggleDebug()     // 开启/关闭调试模式
+  calendarDebug.getStats()        // 查看性能统计
+  calendarDebug.showEvents()      // 查看事件布局详情
+                    `);
+                }
+            };
+            
+            console.log('🔧 日历调试工具已加载！输入 calendarDebug.help() 查看可用命令');
+        }
     }
 
     formatHourLabel(hour) {
