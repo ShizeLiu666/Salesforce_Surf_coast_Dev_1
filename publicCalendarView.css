@@ -219,6 +219,10 @@
     width: 155px; /* fixed to align with header gutter */
     overflow-y: hidden;
     position: relative;
+    /* CRITICAL: Ensure no padding/margin that could offset time alignment */
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
 }
 
 .week-days-grid {
@@ -227,6 +231,10 @@
     position: relative;
     overflow-y: auto; /* scroll here so header can stay perfectly aligned with body */
     min-width: 0; /* prevent child content from stretching columns */
+    /* CRITICAL: Ensure no padding/margin that could offset event alignment */
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
 }
 
 .week-day-column {
@@ -247,7 +255,8 @@
     height: 50px;
     border-bottom: 1px solid #f3f4f6; /* Lighter border */
     position: relative;
-    padding: 1px; /* Reduced padding for better density */
+    padding: 0; /* CRITICAL: Remove padding to prevent offset */
+    margin: 0; /* CRITICAL: Remove margin to prevent offset */
     overflow: visible; /* Allow events to be positioned precisely */
     box-sizing: border-box; /* borders included in size */
 }
@@ -569,10 +578,25 @@
     justify-content: center;
     background-color: #fafafa;
     width: 155px;
+    /* CRITICAL: Ensure exact alignment with hour-slot */
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    /* CRITICAL: Ensure same border treatment as hour-slot */
+    border-top: none;
+    border-left: none;
+    border-right: none;
 }
 
 .time-slot:last-child {
     border-bottom: none;
+}
+
+.time-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #6b7280;
+    text-align: center;
 }
 
 /* Custom Event Modal */

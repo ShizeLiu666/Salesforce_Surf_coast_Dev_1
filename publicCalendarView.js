@@ -73,6 +73,9 @@ export default class PublicCalendarView extends LightningElement {
         
         // Apply grid positioning to events
         this.applyGridPositioning();
+        
+        // CRITICAL: Verify time axis alignment
+        this.verifyTimeAxisAlignment();
     }
     
     ensureScrollFunctionality() {
@@ -324,8 +327,20 @@ export default class PublicCalendarView extends LightningElement {
             SlotIndex: s.slotIndex,
             TimeLabel: s.label,
             Hour24: s.value,
-            PositionPx: s.slotIndex * 50
+            PositionPx: s.slotIndex * 50,
+            ExpectedAt: `${s.slotIndex * 50}px from top`
         })));
+        
+        // CRITICAL: Test specific 3PM mapping
+        const threePMSlot = slots.find(s => s.value === 15);
+        if (threePMSlot) {
+            console.log(`🎯 [CRITICAL] 3PM (hour 15) mapping:`, {
+                slotIndex: threePMSlot.slotIndex,
+                expectedPosition: `${threePMSlot.slotIndex * 50}px`,
+                label: threePMSlot.label,
+                shouldBe: '10th slot (500px from top)'
+            });
+        }
     }
 
     initializeCurrentWeek() {
@@ -2220,6 +2235,35 @@ export default class PublicCalendarView extends LightningElement {
             debugMode: this.debugMode,
             timestamp: new Date().toISOString()
         };
+    }
+
+    verifyTimeAxisAlignment() {
+        try {
+            const timeSlots = this.template.querySelectorAll('.time-slot');
+            const hourSlots = this.template.querySelectorAll('.hour-slot');
+            
+            if (timeSlots.length > 0 && hourSlots.length > 0) {
+                const timeSlotHeight = timeSlots[0].offsetHeight;
+                const hourSlotHeight = hourSlots[0].offsetHeight;
+                
+                console.log(`🔍 [ALIGNMENT CHECK] Time slot height: ${timeSlotHeight}px, Hour slot height: ${hourSlotHeight}px`);
+                
+                if (timeSlotHeight !== hourSlotHeight) {
+                    console.error(`❌ [ALIGNMENT ERROR] Height mismatch! Time: ${timeSlotHeight}px vs Hour: ${hourSlotHeight}px`);
+                } else {
+                    console.log(`✅ [ALIGNMENT OK] Heights match: ${timeSlotHeight}px`);
+                }
+                
+                // Check specific 3PM slot position
+                if (timeSlots.length >= 11) {
+                    const slot10 = timeSlots[10]; // Should be 3PM
+                    const slot10Top = slot10.offsetTop;
+                    console.log(`🎯 [3PM CHECK] Slot 10 (3PM) top position: ${slot10Top}px, expected: ${10 * 50}px`);
+                }
+            }
+        } catch (error) {
+            console.warn('[ALIGNMENT CHECK] Failed:', error.message);
+        }
     }
 
     formatHourLabel(hour) {
