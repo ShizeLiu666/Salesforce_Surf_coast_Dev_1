@@ -229,28 +229,35 @@ export default class PublicCalendarView extends LightningElement {
                     eventElement.style.height = `${eventData._height || 30}px`;
                     eventElement.style.zIndex = '10';
                     
+                    // 移除可能干扰的样式
+                    eventElement.style.removeProperty('right');
+                    
                     if (eventData._totalInGroup !== undefined && eventData._totalInGroup > 1) {
-                        const containerWidth = eventElement.parentElement.clientWidth;
-                        const eventWidth = Math.floor(containerWidth / eventData._totalInGroup);
+                        // 重叠事件：使用百分比布局确保并列显示
+                        const widthPercent = (100 / eventData._totalInGroup).toFixed(2);
                         const columnIndex = eventData._columnIndex !== undefined ? 
                             eventData._columnIndex : eventData._eventIndex || 0;
-                        const leftPosition = columnIndex * eventWidth;
+                        const leftPercent = (columnIndex * 100 / eventData._totalInGroup).toFixed(2);
                         
-                        eventElement.style.left = `${leftPosition}px`;
-                        eventElement.style.width = `${eventWidth}px`;
+                        eventElement.style.width = `${widthPercent}%`;
+                        eventElement.style.left = `${leftPercent}%`;
+                        
+                        console.log(`[Fallback] "${eventData.title}": 宽度=${widthPercent}%, 位置=${leftPercent}%, 列${columnIndex+1}/${eventData._totalInGroup}`);
                         
                         if (eventData._colorIndex !== undefined) {
                             const color = colors[eventData._colorIndex % colors.length];
                             eventElement.style.setProperty('background-color', color, 'important');
                         } else {
                             // 备用颜色机制
-                            const fallbackColor = colors[0];
+                            const fallbackColor = colors[columnIndex % colors.length];
                             eventElement.style.setProperty('background-color', fallbackColor, 'important');
                         }
                     } else {
-                        eventElement.style.left = '0px';
-                        eventElement.style.right = '0px';
-                        eventElement.style.width = 'auto';
+                        // 单独事件：100%宽度
+                        eventElement.style.width = '100%';
+                        eventElement.style.left = '0%';
+                        
+                        console.log(`[Fallback] "${eventData.title}": 单独事件，100%宽度`);
                         
                         const color = colors[0];
                         eventElement.style.setProperty('background-color', color, 'important');
