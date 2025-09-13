@@ -385,9 +385,32 @@
 }
 
 .event-block.grid-positioned:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    opacity: 0.95;
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000 !important;
+    border-width: 2px;
+    
+    /* 确保hover时内容可见 */
+    overflow: visible;
+    white-space: normal;
+}
+
+/* hover时显示完整信息 */
+.event-block.grid-positioned:hover::after {
+    content: attr(data-hover-info);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 4px 6px;
+    font-size: 10px;
+    border-radius: 0 0 3px 3px;
+    white-space: nowrap;
+    z-index: 1001;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .event-block.grid-positioned .event-time {
@@ -716,25 +739,106 @@
     box-sizing: border-box;
 }
 
-/* 小事件的文字优化 */
-.event-block.grid-positioned[style*="width: 1"] .event-title,
-.event-block.grid-positioned[style*="width: 2"] .event-title {
-    font-size: 9px;
+/* ========== 窄列事件优化显示 ========== */
+
+/* 窄事件（宽度小于15%）的优化 */
+.event-block.grid-positioned[style*="width: 5."] .event-title,
+.event-block.grid-positioned[style*="width: 6."] .event-title,
+.event-block.grid-positioned[style*="width: 7."] .event-title,
+.event-block.grid-positioned[style*="width: 8."] .event-title,
+.event-block.grid-positioned[style*="width: 9."] .event-title,
+.event-block.grid-positioned[style*="width: 10."] .event-title,
+.event-block.grid-positioned[style*="width: 11."] .event-title,
+.event-block.grid-positioned[style*="width: 12."] .event-title,
+.event-block.grid-positioned[style*="width: 13."] .event-title,
+.event-block.grid-positioned[style*="width: 14."] .event-title {
+    font-size: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
+    margin: 0;
 }
 
-.event-block.grid-positioned[style*="width: 1"] .event-time,
-.event-block.grid-positioned[style*="width: 2"] .event-time {
-    font-size: 8px;
+/* 窄事件的时间显示优化 */
+.event-block.grid-positioned[style*="width: 5."] .event-time,
+.event-block.grid-positioned[style*="width: 6."] .event-time,
+.event-block.grid-positioned[style*="width: 7."] .event-time,
+.event-block.grid-positioned[style*="width: 8."] .event-time,
+.event-block.grid-positioned[style*="width: 9."] .event-time,
+.event-block.grid-positioned[style*="width: 10."] .event-time,
+.event-block.grid-positioned[style*="width: 11."] .event-time,
+.event-block.grid-positioned[style*="width: 12."] .event-time,
+.event-block.grid-positioned[style*="width: 13."] .event-time,
+.event-block.grid-positioned[style*="width: 14."] .event-time {
+    font-size: 7px;
     margin-bottom: 1px;
+    opacity: 0.9;
 }
 
-/* 非常窄的事件只显示标题 */
-.event-block.grid-positioned[style*="width: 1"] .event-time {
-    display: none; /* 太窄时隐藏时间 */
+/* 极窄事件（宽度小于10%）只显示标题 */
+.event-block.grid-positioned[style*="width: 5."] .event-time,
+.event-block.grid-positioned[style*="width: 6."] .event-time,
+.event-block.grid-positioned[style*="width: 7."] .event-time,
+.event-block.grid-positioned[style*="width: 8."] .event-time,
+.event-block.grid-positioned[style*="width: 9."] .event-time {
+    display: none; /* 极窄时隐藏时间，只显示标题 */
 }
+
+/* 极窄事件的标题居中 */
+.event-block.grid-positioned[style*="width: 5."],
+.event-block.grid-positioned[style*="width: 6."],
+.event-block.grid-positioned[style*="width: 7."],
+.event-block.grid-positioned[style*="width: 8."],
+.event-block.grid-positioned[style*="width: 9."] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1px 2px;
+}
+
+.event-block.grid-positioned[style*="width: 5."] .event-title,
+.event-block.grid-positioned[style*="width: 6."] .event-title,
+.event-block.grid-positioned[style*="width: 7."] .event-title,
+.event-block.grid-positioned[style*="width: 8."] .event-title,
+.event-block.grid-positioned[style*="width: 9."] .event-title {
+    font-size: 7px;
+    line-height: 1.1;
+    margin: 0;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* hover时展开窄事件的宽度 */
+.event-block.grid-positioned[style*="width: 5."]:hover,
+.event-block.grid-positioned[style*="width: 6."]:hover,
+.event-block.grid-positioned[style*="width: 7."]:hover,
+.event-block.grid-positioned[style*="width: 8."]:hover,
+.event-block.grid-positioned[style*="width: 9."]:hover,
+.event-block.grid-positioned[style*="width: 10."]:hover,
+.event-block.grid-positioned[style*="width: 11."]:hover,
+.event-block.grid-positioned[style*="width: 12."]:hover,
+.event-block.grid-positioned[style*="width: 13."]:hover,
+.event-block.grid-positioned[style*="width: 14."]:hover {
+    transform: translateY(-1px) scale(1.1);
+    z-index: 1500 !important;
+    min-width: 120px; /* hover时最小宽度 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 多列布局指示器（可选视觉增强） */
+.event-block.grid-positioned[data-total-columns] {
+    border-top: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+.event-block.grid-positioned[data-total-columns="2"] { border-top-color: #22c55e; }
+.event-block.grid-positioned[data-total-columns="3"] { border-top-color: #f59e0b; }
+.event-block.grid-positioned[data-total-columns="4"] { border-top-color: #ef4444; }
+.event-block.grid-positioned[data-total-columns="5"] { border-top-color: #8b5cf6; }
+.event-block.grid-positioned[data-total-columns="6"] { border-top-color: #06b6d4; }
+.event-block.grid-positioned[data-total-columns="7"] { border-top-color: #ec4899; }
+.event-block.grid-positioned[data-total-columns="8"] { border-top-color: #84cc16; }
 
 /* 调试模式样式 */
 .debug-mode .event-block.grid-positioned {

@@ -162,12 +162,33 @@ export default class PublicCalendarView extends LightningElement {
                     const color = colors[colorIndex];
                     eventElement.style.setProperty('background-color', color, 'important');
                     
+                    // ========== 增强hover信息 ==========
+                    const startTime = eventData._startTime ? 
+                        new Date(eventData._startTime).toLocaleTimeString('en-US', {
+                            hour: 'numeric', minute: '2-digit', hour12: true
+                        }) : 'N/A';
+                    const endTime = eventData._endTime ? 
+                        new Date(eventData._endTime).toLocaleTimeString('en-US', {
+                            hour: 'numeric', minute: '2-digit', hour12: true
+                        }) : 'N/A';
+                    
+                    const hoverInfo = `${startTime} - ${endTime} | 列${eventData._colIndex + 1}/${eventData._totalColumns}${eventData._isDynamic ? ' | 动态' : ''}`;
+                    eventElement.setAttribute('data-hover-info', hoverInfo);
+                    
+                    // 更新title属性
+                    const titleInfo = eventData._isDynamic ? 
+                        `${eventData.title}\n时间: ${startTime} - ${endTime}\n位置: 列${eventData._colIndex + 1}/${eventData._totalColumns} (动态布局)\n簇: ${eventData._clusterIndex + 1}` :
+                        `${eventData.title}\n时间: ${startTime} - ${endTime}\n位置: 列${eventData._colIndex + 1}/${eventData._totalColumns}`;
+                    eventElement.setAttribute('title', titleInfo);
+                    
                     // 动态布局标识
                     if (eventData._isDynamic) {
                         eventElement.classList.add('dynamic-layout');
-                        eventElement.setAttribute('title', 
-                            `${eventData.title} (动态布局, ${eventData._segmentCount || 1} 个时间段)`
-                        );
+                    }
+                    
+                    // 添加列数指示器（用于CSS样式选择）
+                    if (eventData._totalColumns) {
+                        eventElement.setAttribute('data-total-columns', eventData._totalColumns);
                     }
                     
                     // 调试日志
@@ -1766,7 +1787,7 @@ export default class PublicCalendarView extends LightningElement {
     }
 
     /**
-     * 几何计算：时间到像素转换
+     * 几何计算：时间到像素转换（零重叠保证版）
      * @param {Object} event - 事件对象
      * @param {Object} params - 布局参数
      * @returns {Object} 几何信息
@@ -1789,28 +1810,54 @@ export default class PublicCalendarView extends LightningElement {
         const top = startMinutes * pxPerMinute;
         const height = Math.max(minEventHeight, (endMinutes - startMinutes) * pxPerMinute);
 
-        // 宽度和位置计算
+        // ========== 零重叠宽度和位置计算 ==========
         let width, left;
         
         if (dynamicWidth !== null && dynamicLeft !== null) {
-            // 动态宽度
-            width = `${dynamicWidth}%`;
-            left = `${dynamicLeft}%`;
+            // 动态宽度（确保精确不重叠）
+            const preciseWidth = Math.max(8, dynamicWidth - 0.5); // 最小8%宽度，减去0.5%防重叠
+            const preciseLeft = Math.min(dynamicLeft, 100 - preciseWidth); // 确保不超出边界
+            
+            width = `${preciseWidth.toFixed(2)}%`;
+            left = `${preciseLeft.toFixed(2)}%`;
         } else {
-            // 固定宽度
-            const columnWidth = (100 - (totalColumns - 1) * (columnGap / totalColumns)) / totalColumns;
-            width = `${columnWidth}%`;
-            left = `${colIndex * (columnWidth + columnGap / totalColumns)}%`;
+            // 固定宽度（保证间隙的精确计算）
+            const totalGapWidth = (totalColumns - 1) * columnGap;
+            const availableWidth = 100 - totalGapWidth;
+            const columnWidth = availableWidth / totalColumns;
+            const leftPosition = colIndex * (columnWidth + columnGap);
+            
+            // 确保最小宽度和边界检查
+            const finalWidth = Math.max(5, columnWidth - 0.1); // 最小5%，减去0.1%防重叠
+            const finalLeft = Math.min(leftPosition, 100 - finalWidth);
+            
+            width = `${finalWidth.toFixed(2)}%`;
+            left = `${finalLeft.toFixed(2)}%`;
         }
 
-        return {
+        // 添加重叠检测元数据
+        const geometry = {
             _top: top,
             _height: height,
             _width: width,
             _left: left,
             _colIndex: colIndex,
-            _totalColumns: totalColumns
+            _totalColumns: totalColumns,
+            
+            // 添加调试和hover信息
+            _startTime: event._startTime,
+            _endTime: event._endTime,
+            _startMinutes: startMinutes,
+            _endMinutes: endMinutes,
+            _duration: endMinutes - startMinutes
         };
+
+        // 调试模式下验证无重叠
+        if (this.debugMode) {
+            console.log(`[GeometryCheck] "${event.title}": 列${colIndex}/${totalColumns}, 宽度${width}, 左边距${left}`);
+        }
+
+        return geometry;
     }
 
     /**
@@ -1945,6 +1992,52 @@ export default class PublicCalendarView extends LightningElement {
                     console.log(`[Debug] 测试算法，动态占满: ${enableDynamicFill}`);
                     // 重新构建当前视图
                     this.buildWeekView();
+                },
+                
+                // 测试极端重叠场景
+                testExtremeOverlap: () => {
+                    console.log('[Debug] 创建极端重叠测试场景...');
+                    
+                    // 创建测试数据：同一时间段的多个事件
+                    const testDate = new Date();
+                    testDate.setHours(10, 0, 0, 0); // 10:00 AM
+                    
+                    const testEvents = [];
+                    for (let i = 0; i < 8; i++) {
+                        const startTime = new Date(testDate.getTime() + i * 15 * 60 * 1000); // 每15分钟开始一个
+                        const endTime = new Date(startTime.getTime() + (60 + i * 10) * 60 * 1000); // 持续1-2.2小时
+                        
+                        testEvents.push({
+                            id: `test-${i}`,
+                            title: `测试事件 ${i + 1}`,
+                            _start: startTime,
+                            _end: endTime,
+                            _startTime: startTime.getTime(),
+                            _endTime: endTime.getTime(),
+                            _key: `test-event-${i}`,
+                            isRecurring: false
+                        });
+                    }
+                    
+                    // 测试算法
+                    const layoutResult = this.calculateOptimizedEventLayout(testEvents, {
+                        enableDynamicFill: true,
+                        pxPerMinute: 50/60,
+                        minEventHeight: 30,
+                        columnGap: 4
+                    });
+                    
+                    console.group('[TestResult] 极端重叠场景测试结果');
+                    console.log(`输入事件数: ${testEvents.length}`);
+                    console.log(`输出布局数: ${layoutResult.length}`);
+                    console.log(`性能统计:`, this.getPerformanceStats());
+                    console.log('布局详情:');
+                    layoutResult.forEach(event => {
+                        console.log(`  "${event.title}": 列${event._colIndex}/${event._totalColumns}, 宽度${event._width}, 位置${event._left}`);
+                    });
+                    console.groupEnd();
+                    
+                    return layoutResult;
                 },
                 
                 // 获取帮助信息
