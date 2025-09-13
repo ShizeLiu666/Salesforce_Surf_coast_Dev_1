@@ -1462,33 +1462,12 @@ export default class PublicCalendarView extends LightningElement {
         const { maxConcurrency, columnAssignments } = this.calculateConcurrencyAndColumns(sortedEvents);
         console.log(`[GoogleCalendarLayout] 最大并发数: ${maxConcurrency}`);
 
-        // Step 3: 计算几何信息
-        const processedEvents = [];
-        
-        if (enableDynamicFill) {
-            // Google Calendar风格：动态占满空隙
-            processedEvents.push(...this.calculateDynamicLayoutGeometry(
-                sortedEvents, columnAssignments, maxConcurrency, { pxPerMinute, minEventHeight }
-            ));
-        } else {
-            // 固定宽度布局
-            sortedEvents.forEach((event, index) => {
-                const colIndex = columnAssignments[index];
-                const geometry = this.calculateStaticEventGeometry(event, {
-                    colIndex,
-                    maxConcurrency,
-                    pxPerMinute,
-                    minEventHeight
-                });
-                
-                processedEvents.push({
-                    ...event,
-                    ...geometry,
-                    _isOptimized: true,
-                    _layoutType: 'static'
-                });
-            });
-        }
+        // Step 3: 计算Google Calendar风格几何信息
+        const processedEvents = this.calculateGoogleCalendarGeometry(
+            sortedEvents, 
+            columnAssignments, 
+            { pxPerMinute, minEventHeight }
+        );
 
         // 性能统计
         const endTime = performance.now();
@@ -1508,9 +1487,9 @@ export default class PublicCalendarView extends LightningElement {
     }
 
     /**
-     * 计算最大并发数和列分配（Google Calendar风格）
+     * 计算列分配（Google Calendar风格）
      * @param {Array} sortedEvents - 按开始时间排序的事件
-     * @returns {Object} { maxConcurrency, columnAssignments }
+     * @returns {Object} { columnAssignments, totalColumns }
      */
     calculateConcurrencyAndColumns(sortedEvents) {
         if (sortedEvents.length === 0) {
@@ -1519,7 +1498,6 @@ export default class PublicCalendarView extends LightningElement {
 
         const columnAssignments = new Array(sortedEvents.length);
         const columnEndTimes = []; // 每列的结束时间
-        let maxConcurrency = 0;
 
         sortedEvents.forEach((event, eventIndex) => {
             // 找到第一个可用的列（结束时间 <= 当前事件开始时间）
@@ -1541,44 +1519,123 @@ export default class PublicCalendarView extends LightningElement {
             // 分配列并更新结束时间
             columnAssignments[eventIndex] = assignedColumn;
             columnEndTimes[assignedColumn] = event._endTime;
-
-            // 更新最大并发数
-            const currentConcurrency = columnEndTimes.filter(endTime => endTime > event._startTime).length;
-            maxConcurrency = Math.max(maxConcurrency, currentConcurrency);
         });
 
-        console.log(`[ConcurrencyCalc] 分配结果: 最大并发=${maxConcurrency}, 总列数=${columnEndTimes.length}`);
+        const totalColumns = columnEndTimes.length;
+        console.log(`[ConcurrencyCalc] 分配结果: 总列数=${totalColumns}`);
         
-        return { maxConcurrency, columnAssignments };
+        return { maxConcurrency: totalColumns, columnAssignments };
     }
 
     /**
-     * 计算静态布局几何信息
-     * @param {Object} event - 事件对象
-     * @param {Object} params - 参数
-     * @returns {Object} 几何信息
+     * 计算Google Calendar风格的事件几何信息
+     * 支持动态宽度：事件在不同时间段可以有不同的宽度
+     * @param {Array} sortedEvents - 所有已排序的事件
+     * @param {Array} columnAssignments - 列分配
+     * @param {Object} options - 配置选项
+     * @returns {Array} 包含几何信息的事件
      */
-    calculateStaticEventGeometry(event, params) {
-        const { colIndex, maxConcurrency, pxPerMinute, minEventHeight } = params;
+    calculateGoogleCalendarGeometry(sortedEvents, columnAssignments, options) {
+        const { pxPerMinute, minEventHeight } = options;
+        const results = [];
 
-        // 时间到像素
-        const startMinutes = this.timeToMinutes(new Date(event._startTime));
-        const endMinutes = this.timeToMinutes(new Date(event._endTime));
-        const top = startMinutes * pxPerMinute;
-        const height = Math.max(minEventHeight, (endMinutes - startMinutes) * pxPerMinute);
+        // 收集所有时间点以创建时间段
+        const timePoints = new Set();
+        sortedEvents.forEach(event => {
+            timePoints.add(event._startTime);
+            timePoints.add(event._endTime);
+        });
+        const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
 
-        // 根据最大并发数计算宽度和位置
-        const width = (100 / maxConcurrency).toFixed(2); // 百分比
-        const left = (colIndex * 100 / maxConcurrency).toFixed(2); // 百分比
+        // 为每个事件计算在每个时间段的并发情况
+        sortedEvents.forEach((event, eventIndex) => {
+            const colIndex = columnAssignments[eventIndex];
+            
+            // 计算基本几何信息
+            const startMinutes = this.timeToMinutes(new Date(event._startTime));
+            const endMinutes = this.timeToMinutes(new Date(event._endTime));
+            const top = startMinutes * pxPerMinute;
+            const height = Math.max(minEventHeight, (endMinutes - startMinutes) * pxPerMinute);
+            
+            // 计算此事件跨越的时间段并发情况
+            const concurrencyInfo = this.calculateEventConcurrencyAcrossTimeSegments(
+                event, sortedEvents, columnAssignments, sortedTimePoints
+            );
+            
+            // 使用最常见的并发数作为主要布局依据
+            const primaryConcurrency = concurrencyInfo.maxConcurrency;
+            const primaryPosition = concurrencyInfo.columnPositionInMaxConcurrency;
+            
+            // Google Calendar风格：宽度 = 100% / 最大并发数，位置基于在最大并发段的位置
+            const width = (100 / primaryConcurrency).toFixed(2);
+            const left = (primaryPosition * 100 / primaryConcurrency).toFixed(2);
 
+            console.log(`[GoogleCalendar] "${event.title}": 最大${primaryConcurrency}并发, 宽度=${width}%, 位置=${left}%, 列=${colIndex}`);
+
+            results.push({
+                ...event,
+                _top: top,
+                _height: height,
+                _width: `${width}%`,
+                _left: `${left}%`,
+                _colIndex: colIndex,
+                _primaryConcurrency: primaryConcurrency,
+                _primaryPosition: primaryPosition,
+                _layoutType: 'google-calendar',
+                _isOptimized: true
+            });
+        });
+
+        return results;
+    }
+
+    /**
+     * 计算事件在各时间段的并发情况
+     * @param {Object} targetEvent - 目标事件
+     * @param {Array} allEvents - 所有事件
+     * @param {Array} columnAssignments - 列分配
+     * @param {Array} timePoints - 时间点数组
+     * @returns {Object} 并发信息
+     */
+    calculateEventConcurrencyAcrossTimeSegments(targetEvent, allEvents, columnAssignments, timePoints) {
+        let maxConcurrency = 0;
+        let columnPositionInMaxConcurrency = 0;
+        
+        // 遍历事件跨越的每个时间段
+        for (let i = 0; i < timePoints.length - 1; i++) {
+            const segmentStart = timePoints[i];
+            const segmentEnd = timePoints[i + 1];
+            
+            // 检查目标事件是否跨越此时间段
+            if (targetEvent._startTime < segmentEnd && targetEvent._endTime > segmentStart) {
+                // 找到在此时间段内活跃的所有事件
+                const activeEvents = [];
+                const activeColumns = [];
+                
+                allEvents.forEach((event, index) => {
+                    if (event._startTime < segmentEnd && event._endTime > segmentStart) {
+                        activeEvents.push(event);
+                        activeColumns.push(columnAssignments[index]);
+                    }
+                });
+                
+                // 计算此时间段的并发数和目标事件的位置
+                const segmentConcurrency = activeEvents.length;
+                const targetColumnIndex = columnAssignments[allEvents.findIndex(e => e === targetEvent)];
+                const sortedActiveColumns = [...new Set(activeColumns)].sort((a, b) => a - b);
+                const positionInSegment = sortedActiveColumns.indexOf(targetColumnIndex);
+                
+                // 更新最大并发数信息
+                if (segmentConcurrency > maxConcurrency) {
+                    maxConcurrency = segmentConcurrency;
+                    columnPositionInMaxConcurrency = positionInSegment;
+                }
+            }
+        }
+        
         return {
-            _top: top,
-            _height: height,
-            _width: `${width}%`,
-            _left: `${left}%`,
-            _colIndex: colIndex,
-            _maxConcurrency: maxConcurrency,
-            _layoutType: 'static'
+            maxConcurrency,
+            columnPositionInMaxConcurrency
         };
     }
 
@@ -2284,6 +2341,9 @@ export default class PublicCalendarView extends LightningElement {
                 // 测试重叠场景修复效果
                 testOverlapScenarios: () => this.testOverlapScenarios(),
                 
+                // 测试Google Calendar风格布局
+                testGoogleCalendarBehavior: () => this.testGoogleCalendarBehavior(),
+                
                 // 获取帮助信息
                 help: () => {
                     console.log(`
@@ -2299,6 +2359,7 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.validateColorFix() - 验证颜色修复效果
   calendarDebug.diagnoseOverlapIssue() - 诊断重叠事件问题
   calendarDebug.testOverlapScenarios() - 测试重叠场景修复效果
+  calendarDebug.testGoogleCalendarBehavior() - 测试Google Calendar风格布局
   calendarDebug.help()            - 显示此帮助信息
 
 示例：
@@ -2308,6 +2369,7 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.validateColorFix() // 验证颜色修复效果
   calendarDebug.diagnoseOverlapIssue() // 诊断重叠事件问题
   calendarDebug.testOverlapScenarios() // 测试重叠场景修复效果
+  calendarDebug.testGoogleCalendarBehavior() // 测试Google Calendar行为
                     `);
                 }
             };
@@ -2665,6 +2727,162 @@ export default class PublicCalendarView extends LightningElement {
         }
         
         return true;
+    }
+
+    /**
+     * 测试Google Calendar风格布局行为
+     * 验证所有关键要求是否满足
+     */
+    testGoogleCalendarBehavior() {
+        console.group('[Google Calendar Test] 测试布局行为');
+        
+        const baseTime = new Date();
+        baseTime.setHours(8, 0, 0, 0); // 8:00 AM
+        
+        // 测试案例1: 长事件和短事件重叠
+        const testCase1 = [
+            {
+                title: '长事件 (8:00-17:30)',
+                _startTime: baseTime.getTime(),
+                _endTime: baseTime.getTime() + 9.5 * 60 * 60 * 1000, // 9.5 hours
+                _key: 'long-event'
+            },
+            {
+                title: '短事件 (14:30-15:00)',
+                _startTime: baseTime.getTime() + 6.5 * 60 * 60 * 1000, // 6.5 hours later
+                _endTime: baseTime.getTime() + 7 * 60 * 60 * 1000, // 7 hours later
+                _key: 'short-event'
+            }
+        ];
+        
+        // 测试案例2: 三个部分重叠事件
+        const testCase2 = [
+            {
+                title: '事件A (15:00-16:00)',
+                _startTime: baseTime.getTime() + 7 * 60 * 60 * 1000,
+                _endTime: baseTime.getTime() + 8 * 60 * 60 * 1000,
+                _key: 'event-a'
+            },
+            {
+                title: '事件B (15:15-15:45)',
+                _startTime: baseTime.getTime() + 7.25 * 60 * 60 * 1000,
+                _endTime: baseTime.getTime() + 7.75 * 60 * 60 * 1000,
+                _key: 'event-b'
+            },
+            {
+                title: '事件C (15:30-16:30)',
+                _startTime: baseTime.getTime() + 7.5 * 60 * 60 * 1000,
+                _endTime: baseTime.getTime() + 8.5 * 60 * 60 * 1000,
+                _key: 'event-c'
+            }
+        ];
+        
+        // 测试案例3: 仅触摸的连续事件
+        const testCase3 = [
+            {
+                title: '事件1 (10:00-11:00)',
+                _startTime: baseTime.getTime() + 2 * 60 * 60 * 1000,
+                _endTime: baseTime.getTime() + 3 * 60 * 60 * 1000,
+                _key: 'event-1'
+            },
+            {
+                title: '事件2 (11:00-12:00)',
+                _startTime: baseTime.getTime() + 3 * 60 * 60 * 1000,
+                _endTime: baseTime.getTime() + 4 * 60 * 60 * 1000,
+                _key: 'event-2'
+            }
+        ];
+        
+        const testCases = [
+            { name: '长短事件重叠', events: testCase1, expected: { maxWidth: 50, minWidth: 50 } },
+            { name: '三事件部分重叠', events: testCase2, expected: { maxWidth: 33.33, minWidth: 33.33 } },
+            { name: '触摸连续事件', events: testCase3, expected: { maxWidth: 100, minWidth: 100 } }
+        ];
+        
+        let passedTests = 0;
+        let totalTests = testCases.length;
+        
+        testCases.forEach((testCase, index) => {
+            console.log(`\n=== 测试 ${index + 1}: ${testCase.name} ===`);
+            
+            try {
+                const result = this.calculateOptimizedEventLayout(testCase.events, {
+                    enableDynamicFill: true,
+                    pxPerMinute: 50/60,
+                    minEventHeight: 30
+                });
+                
+                let testPassed = true;
+                const actualWidths = result.map(event => parseFloat(event._width));
+                
+                console.log('布局结果:');
+                result.forEach(event => {
+                    const startTime = new Date(event._startTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true
+                    });
+                    const endTime = new Date(event._endTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true
+                    });
+                    console.log(`  "${event.title}" (${startTime}-${endTime}): 宽度=${event._width}, 位置=${event._left}`);
+                });
+                
+                // 验证基本要求
+                if (testCase.name === '触摸连续事件') {
+                    // 触摸事件应该不重叠，各占100%
+                    const allFullWidth = actualWidths.every(width => Math.abs(width - 100) < 1);
+                    if (!allFullWidth) {
+                        console.log('❌ 触摸事件应该各占100%宽度');
+                        testPassed = false;
+                    }
+                } else {
+                    // 重叠事件应该有相同的较小宽度
+                    const expectedWidth = testCase.expected.maxWidth;
+                    const correctWidths = actualWidths.every(width => Math.abs(width - expectedWidth) < 1);
+                    if (!correctWidths) {
+                        console.log(`❌ 重叠事件宽度应该约为${expectedWidth}%`);
+                        testPassed = false;
+                    }
+                }
+                
+                // 验证无事件被隐藏（所有事件都有合理的位置）
+                const allVisible = result.every(event => {
+                    const left = parseFloat(event._left);
+                    const width = parseFloat(event._width);
+                    return left >= 0 && left + width <= 100;
+                });
+                
+                if (!allVisible) {
+                    console.log('❌ 有事件位置超出边界');
+                    testPassed = false;
+                }
+                
+                if (testPassed) {
+                    console.log('✅ 测试通过');
+                    passedTests++;
+                } else {
+                    console.log('❌ 测试失败');
+                }
+                
+            } catch (error) {
+                console.log(`❌ 测试异常: ${error.message}`);
+            }
+        });
+        
+        console.log(`\n📊 测试总结: ${passedTests}/${totalTests} 通过`);
+        
+        if (passedTests === totalTests) {
+            console.log('🎉 所有Google Calendar行为测试通过！');
+        } else {
+            console.log('⚠️  部分测试失败，需要进一步调试');
+        }
+        
+        console.groupEnd();
+        
+        return {
+            passed: passedTests,
+            total: totalTests,
+            success: passedTests === totalTests
+        };
     }
 
     formatHourLabel(hour) {
