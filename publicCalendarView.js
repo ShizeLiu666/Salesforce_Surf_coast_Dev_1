@@ -303,6 +303,29 @@ export default class PublicCalendarView extends LightningElement {
         
         console.log('[TimeSlots] Built 24 time slots:', slots.map(s => `${s.label}(slot${s.slotIndex})`));
         this.timeSlots = slots;
+        
+        // Validate 24-hour coverage
+        if (slots.length !== 24) {
+            console.error(`[TimeSlots] ERROR: Expected 24 slots, got ${slots.length}`);
+        }
+        
+        // Validate specific key times
+        const slot0 = slots[0]; // Should be 5AM
+        const slot10 = slots[10]; // Should be 3PM (15-5=10)
+        const slot23 = slots[23]; // Should be 4AM
+        console.log(`[TimeSlots] Key validation:`, {
+            slot0: slot0.label,
+            slot10: slot10.label + ' (should be 3PM)',
+            slot23: slot23.label
+        });
+        
+        // Create alignment verification table
+        console.table(slots.slice(0, 12).map(s => ({
+            SlotIndex: s.slotIndex,
+            TimeLabel: s.label,
+            Hour24: s.value,
+            PositionPx: s.slotIndex * 50
+        })));
     }
 
     initializeCurrentWeek() {
@@ -983,13 +1006,23 @@ export default class PublicCalendarView extends LightningElement {
             }
 
             // Create hour slots for this day (5 AM to 4 AM next day) - background grid only
+            // MUST match the timeSlots array for proper alignment
             const hourSlots = [];
             for (let h = 5; h < 29; h++) {
                 const hour = h % 24; // Wrap around after 24
+                const slotIndex = h - 5; // This should match the timeSlots slotIndex
                 hourSlots.push({
                     hour: hour,
-                    hourLabel: this.formatHourLabel(hour)
+                    hourLabel: this.formatHourLabel(hour),
+                    slotIndex: slotIndex // Add for debugging alignment
                 });
+            }
+            
+            // Debug: Verify alignment with timeSlots
+            console.log(`[WeekView] Day ${currentDate.toDateString()} hourSlots:`, 
+                hourSlots.slice(0, 5).map(s => `${s.hourLabel}(slot${s.slotIndex})`));
+            if (hourSlots.length !== this.timeSlots.length) {
+                console.error(`[WeekView] ALIGNMENT ERROR: hourSlots=${hourSlots.length}, timeSlots=${this.timeSlots.length}`);
             }
 
             // Process all events for this day and calculate grid positions with overlap detection
@@ -1032,6 +1065,18 @@ export default class PublicCalendarView extends LightningElement {
                     }
                     
                     console.log(`[GridPosition] Event "${e.title}" at ${startHour}:${startMinutes.toString().padStart(2, '0')} → slot ${slotIndex}`);
+                    
+                    // Special debug for 3:30PM events (15:30)
+                    if (startHour === 15 && startMinutes === 30) {
+                        console.log(`🎯 [SPECIAL DEBUG] 3:30PM Event "${e.title}":`, {
+                            startHour: startHour,
+                            startMinutes: startMinutes,
+                            slotIndex: slotIndex,
+                            expectedSlot: 10, // 3PM should be slot 10 (15-5=10)
+                            topPosition: `${slotIndex * 50 + (startMinutes / 60) * 50}px`,
+                            expectedTop: `${10 * 50 + 30}px = 530px`
+                        });
+                    }
                     
                     // ========== 24-HOUR GRID POSITION FIX - END ==========
                     
