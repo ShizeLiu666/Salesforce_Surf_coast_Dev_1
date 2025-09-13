@@ -61,14 +61,9 @@ export default class PublicCalendarView extends LightningElement {
     ];
 
     connectedCallback() {
-        // console.log('[Init] PublicCalendarView connected');
-        // console.log(`${LOG_TAG} ${LOG_VERSION} - component connected`);
         this.initializeCurrentWeekStart();
         this.buildTimeSlots();
         this.loadCalendarData();
-        
-        // 设置全局调试工具
-        this.setupGlobalDebugTools();
     }
 
     renderedCallback() {
@@ -125,7 +120,6 @@ export default class PublicCalendarView extends LightningElement {
         // Apply optimized positioning styles to events
         const eventElements = this.template.querySelectorAll('.grid-positioned');
         
-        console.log(`[OptimizedGrid] 应用新布局，共 ${eventElements.length} 个事件元素`);
         
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#06b6d4'];
         
@@ -144,11 +138,9 @@ export default class PublicCalendarView extends LightningElement {
             }
             
             if (eventData) {
-                // 检查是否使用了新的优化算法
+                // Check if using the new optimized algorithm
                 if (eventData._isOptimized) {
-                    console.log(`[OptimizedGrid] 应用优化布局: "${eventData.title}"`);
-                    
-                    // 使用新算法计算的几何信息
+                    // Use geometry calculated by new algorithm
                     eventElement.style.position = 'absolute';
                     eventElement.style.top = `${eventData._top || 0}px`;
                     eventElement.style.height = `${eventData._height || 30}px`;
@@ -156,24 +148,22 @@ export default class PublicCalendarView extends LightningElement {
                     eventElement.style.left = eventData._left || '0%';
                     eventElement.style.zIndex = '10';
                     
-                    // 修复颜色应用逻辑
+                    // Fix color application logic
                     const colIndex = eventData._colIndex !== undefined ? eventData._colIndex : 0;
                     const colorIndex = colIndex % colors.length;
                     const color = colors[colorIndex];
                     
-                    // 强制应用颜色，确保覆盖所有CSS样式
-                    eventElement.style.removeProperty('background'); // 移除可能的background简写
-                    eventElement.style.removeProperty('background-image'); // 移除背景图
+                    // Force apply color, ensure override all CSS styles
+                    eventElement.style.removeProperty('background'); // Remove possible background shorthand
+                    eventElement.style.removeProperty('background-image'); // Remove background image
                     eventElement.style.backgroundColor = color;
                     eventElement.style.setProperty('background-color', color, 'important');
                     
-                    // 确保文字可见
+                    // Ensure text visibility
                     eventElement.style.color = '#ffffff';
                     eventElement.style.setProperty('color', '#ffffff', 'important');
                     
-                    console.log(`[ColorFix] "${eventData.title}": 列${colIndex} → 颜色${colorIndex} → ${color}`);
-                    
-                    // ========== Google Calendar风格布局信息 ==========
+                    // ========== Google Calendar style layout info ==========
                     const startTime = eventData._startTime ? 
                         new Date(eventData._startTime).toLocaleTimeString('en-US', {
                             hour: 'numeric', minute: '2-digit', hour12: true
@@ -186,13 +176,13 @@ export default class PublicCalendarView extends LightningElement {
                     const maxConcurrency = eventData._maxConcurrency || eventData._totalColumns || 1;
                     
                     const layoutInfo = eventData._isDynamic ? 
-                        `动态布局 | 最大并发: ${maxConcurrency} | 列: ${colIndex + 1}` :
-                        `固定布局 | 并发: ${maxConcurrency} | 列: ${colIndex + 1}/${maxConcurrency}`;
+                        `Dynamic Layout | Max Concurrency: ${maxConcurrency} | Column: ${colIndex + 1}` :
+                        `Fixed Layout | Concurrency: ${maxConcurrency} | Column: ${colIndex + 1}/${maxConcurrency}`;
                     
-                    const titleInfo = `${eventData.title}\n时间: ${startTime} - ${endTime}\n${layoutInfo}`;
+                    const titleInfo = `${eventData.title}\nTime: ${startTime} - ${endTime}\n${layoutInfo}`;
                     eventElement.setAttribute('title', titleInfo);
                     
-                    // 布局标识
+                    // Layout identifier
                     if (eventData._layoutType) {
                         eventElement.setAttribute('data-layout-type', eventData._layoutType);
                     }
@@ -201,39 +191,24 @@ export default class PublicCalendarView extends LightningElement {
                         eventElement.classList.add('dynamic-layout');
                     }
                     
-                    // 添加并发数指示器（用于CSS样式选择）
+                    // Add concurrency indicator (for CSS style selection)
                     if (maxConcurrency) {
                         eventElement.setAttribute('data-max-concurrency', maxConcurrency);
                     }
                     
-                    // 调试日志
-                    if (eventData.title && eventData.title.includes('Kate')) {
-                        console.log(`[OptimizedGrid] "${eventData.title}":`, {
-                            top: eventData._top,
-                            height: eventData._height,
-                            width: eventData._width,
-                            left: eventData._left,
-                            colIndex: eventData._colIndex,
-                            totalColumns: eventData._totalColumns,
-                            isDynamic: eventData._isDynamic,
-                            clusterIndex: eventData._clusterIndex
-                        });
-                    }
                     
                 } else {
-                    // 回退到旧算法（兼容性）
-                    console.log(`[OptimizedGrid] 回退旧算法: "${eventData.title}"`);
-                    
+                    // Fallback to old algorithm (compatibility)
                     eventElement.style.position = 'absolute';
                     eventElement.style.top = `${eventData._topPosition || 0}px`;
                     eventElement.style.height = `${eventData._height || 30}px`;
                     eventElement.style.zIndex = '10';
                     
-                    // 移除可能干扰的样式
+                    // Remove potentially interfering styles
                     eventElement.style.removeProperty('right');
                     
                     if (eventData._totalInGroup !== undefined && eventData._totalInGroup > 1) {
-                        // 重叠事件：使用百分比布局确保并列显示
+                        // Overlapping events: use percentage layout to ensure side-by-side display
                         const widthPercent = (100 / eventData._totalInGroup).toFixed(2);
                         const columnIndex = eventData._columnIndex !== undefined ? 
                             eventData._columnIndex : eventData._eventIndex || 0;
@@ -242,39 +217,35 @@ export default class PublicCalendarView extends LightningElement {
                         eventElement.style.width = `${widthPercent}%`;
                         eventElement.style.left = `${leftPercent}%`;
                         
-                        console.log(`[Fallback] "${eventData.title}": 宽度=${widthPercent}%, 位置=${leftPercent}%, 列${columnIndex+1}/${eventData._totalInGroup}`);
-                        
                         if (eventData._colorIndex !== undefined) {
                             const color = colors[eventData._colorIndex % colors.length];
                             eventElement.style.setProperty('background-color', color, 'important');
                         } else {
-                            // 备用颜色机制
+                            // Fallback color mechanism
                             const fallbackColor = colors[columnIndex % colors.length];
                             eventElement.style.setProperty('background-color', fallbackColor, 'important');
                         }
                     } else {
-                        // 单独事件：100%宽度
+                        // Single event: 100% width
                         eventElement.style.width = '100%';
                         eventElement.style.left = '0%';
-                        
-                        console.log(`[Fallback] "${eventData.title}": 单独事件，100%宽度`);
                         
                         const color = colors[0];
                         eventElement.style.setProperty('background-color', color, 'important');
                     }
                 }
                 
-                // 重复事件样式
+                // Recurring event styles
                 if (eventData.isRecurring) {
                     eventElement.classList.add('recurring-event');
                 }
                 
             } else {
-                console.warn(`[OptimizedGrid] 未找到事件数据: ${eventId}`);
+                console.warn(`[OptimizedGrid] Event data not found: ${eventId}`);
             }
         });
         
-        console.log(`[OptimizedGrid] 布局应用完成`);
+        console.log(`[OptimizedGrid] Layout application completed`);
     }
 
     scrollTo4AM() {
@@ -1078,18 +1049,18 @@ export default class PublicCalendarView extends LightningElement {
                 });
             });
             
-            // ========== 使用新的优化布局算法 ==========
+            // ========== Using new optimized layout algorithm ==========
             // Second pass: detect overlaps and calculate layout using optimized algorithm
-            console.log(`[NewAlgorithm] 开始处理 ${currentDate.toDateString()} 的 ${rawEvents.length} 个事件`);
+            console.log(`[NewAlgorithm] Starting to process ${rawEvents.length} events for ${currentDate.toDateString()}`);
             
             const processedEvents = this.calculateOptimizedEventLayout(rawEvents, {
-                enableDynamicFill: true,     // 启用动态占满空隙
-                pxPerMinute: this.SLOT_HEIGHT_PX / 60,  // 每分钟像素数 (50px/60min ≈ 0.83px/min)
-                minEventHeight: 30,          // 最小事件高度30px
-                columnGap: 4                 // 列间距4px
+                enableDynamicFill: true,     // Enable dynamic gap filling
+                pxPerMinute: this.SLOT_HEIGHT_PX / 60,  // Pixels per minute (50px/60min ≈ 0.83px/min)
+                minEventHeight: 30,          // Minimum event height 30px
+                columnGap: 4                 // Column gap 4px
             });
             
-            console.log(`[NewAlgorithm] ${currentDate.toDateString()} 完成，输出 ${processedEvents.length} 个布局事件`);
+            console.log(`[NewAlgorithm] Completed ${currentDate.toDateString()}, output ${processedEvents.length} layout events`);
             allEvents.push(...processedEvents);
 
             // SPECIAL DEBUG for Thu 11
@@ -1427,15 +1398,15 @@ export default class PublicCalendarView extends LightningElement {
         return overlap;
     }
 
-    // ========== 新的事件布局算法 ==========
-    // 路线：数据 → 几何 → 渲染
-    // 1. 按天分桶 → 2. 切成重叠簇 → 3. 簇内列分配 → 4. 几何计算 → 5. 渲染
+    // ========== New Event Layout Algorithm ==========
+    // Pipeline: Data → Geometry → Rendering
+    // 1. Group by day → 2. Split into overlap clusters → 3. Column assignment within clusters → 4. Geometry calculation → 5. Rendering
 
     /**
-     * 主入口：Google Calendar风格的事件布局算法
-     * @param {Array} events - 单天内的事件列表
-     * @param {Object} options - 配置选项
-     * @returns {Array} 处理后的事件（包含布局信息）
+     * Main entry: Google Calendar style event layout algorithm
+     * @param {Array} events - Event list for a single day
+     * @param {Object} options - Configuration options
+     * @returns {Array} Processed events (with layout information)
      */
     calculateOptimizedEventLayout(events, options = {}) {
         if (events.length === 0) return [];
@@ -1443,33 +1414,33 @@ export default class PublicCalendarView extends LightningElement {
         const startTime = performance.now();
         
         const {
-            enableDynamicFill = true,  // 是否启用动态占满空隙
-            pxPerMinute = 1,          // 每分钟像素数
-            minEventHeight = 20       // 最小事件高度
+            enableDynamicFill = true,  // Whether to enable dynamic gap filling
+            pxPerMinute = 1,          // Pixels per minute
+            minEventHeight = 20       // Minimum event height
         } = options;
 
-        console.log(`[GoogleCalendarLayout] 开始处理 ${events.length} 个事件`);
+        console.log(`[GoogleCalendarLayout] Starting to process ${events.length} events`);
 
-        // Step 1: 按开始时间排序
+        // Step 1: Sort by start time
         const sortedEvents = [...events].sort((a, b) => {
             if (a._startTime === b._startTime) {
-                return a._endTime - b._endTime; // 同时开始的，短的在前
+                return a._endTime - b._endTime; // When start time is same, shorter events first
             }
             return a._startTime - b._startTime;
         });
 
-        // Step 2: 计算最大并发数和列分配
+        // Step 2: Calculate max concurrency and column assignments
         const { maxConcurrency, columnAssignments } = this.calculateConcurrencyAndColumns(sortedEvents);
-        console.log(`[GoogleCalendarLayout] 最大并发数: ${maxConcurrency}`);
+        console.log(`[GoogleCalendarLayout] Max concurrency: ${maxConcurrency}`);
 
-        // Step 3: 计算Google Calendar风格几何信息
+        // Step 3: Calculate Google Calendar style geometry
         const processedEvents = this.calculateGoogleCalendarGeometry(
             sortedEvents, 
             columnAssignments, 
             { pxPerMinute, minEventHeight }
         );
 
-        // 性能统计
+        // Performance statistics
         const endTime = performance.now();
         const layoutTime = Math.round(endTime - startTime);
 
@@ -1480,15 +1451,15 @@ export default class PublicCalendarView extends LightningElement {
             dynamicEventsCount: processedEvents.filter(e => e._isDynamic).length
         };
 
-        console.log(`[GoogleCalendarLayout] 完成，输出 ${processedEvents.length} 个布局事件`);
-        console.log(`[Performance] 布局耗时: ${layoutTime}ms, 最大并发: ${maxConcurrency}`);
+        console.log(`[GoogleCalendarLayout] Completed, output ${processedEvents.length} layout events`);
+        console.log(`[Performance] Layout time: ${layoutTime}ms, max concurrency: ${maxConcurrency}`);
         
         return processedEvents;
     }
 
     /**
-     * 计算列分配（Google Calendar风格）
-     * @param {Array} sortedEvents - 按开始时间排序的事件
+     * Calculate column assignments (Google Calendar style)
+     * @param {Array} sortedEvents - Events sorted by start time
      * @returns {Object} { columnAssignments, totalColumns }
      */
     calculateConcurrencyAndColumns(sortedEvents) {
@@ -1497,10 +1468,10 @@ export default class PublicCalendarView extends LightningElement {
         }
 
         const columnAssignments = new Array(sortedEvents.length);
-        const columnEndTimes = []; // 每列的结束时间
+        const columnEndTimes = []; // End time for each column
 
         sortedEvents.forEach((event, eventIndex) => {
-            // 找到第一个可用的列（结束时间 <= 当前事件开始时间）
+            // Find first available column (end time <= current event start time)
             let assignedColumn = -1;
             
             for (let col = 0; col < columnEndTimes.length; col++) {
@@ -1510,19 +1481,18 @@ export default class PublicCalendarView extends LightningElement {
                 }
             }
 
-            // 如果没有可用列，创建新列
+            // If no available column, create new column
             if (assignedColumn === -1) {
                 assignedColumn = columnEndTimes.length;
                 columnEndTimes.push(0);
             }
 
-            // 分配列并更新结束时间
+            // Assign column and update end time
             columnAssignments[eventIndex] = assignedColumn;
             columnEndTimes[assignedColumn] = event._endTime;
         });
 
         const totalColumns = columnEndTimes.length;
-        console.log(`[ConcurrencyCalc] 分配结果: 总列数=${totalColumns}`);
         
         return { maxConcurrency: totalColumns, columnAssignments };
     }
@@ -2192,696 +2162,6 @@ export default class PublicCalendarView extends LightningElement {
             cacheHitRate: this.cacheTimestamp ? '有缓存' : '无缓存',
             debugMode: this.debugMode,
             timestamp: new Date().toISOString()
-        };
-    }
-
-    /**
-     * 设置全局调试工具
-     */
-    setupGlobalDebugTools() {
-        // 将调试方法暴露到全局window对象，方便开发者控制台调用
-        if (typeof window !== 'undefined') {
-            // 创建全局调试对象
-            window.calendarDebug = {
-                // 切换调试模式
-                toggleDebug: () => this.toggleDebugMode(),
-                
-                // 获取性能统计
-                getStats: () => this.getPerformanceStats(),
-                
-                // 手动触发重新布局
-                reLayout: () => {
-                    console.log('[Debug] 手动触发重新布局');
-                    this.refreshView();
-                },
-                
-                // 显示当前事件数据
-                showEvents: () => {
-                    console.group('[Debug] 当前事件数据');
-                    this.weekDays.forEach((day, index) => {
-                        console.log(`第${index + 1}天 (${day.dateStr}): ${day.allEvents.length} 个事件`);
-                        day.allEvents.forEach(event => {
-                            console.log(`  - "${event.title}": 簇${event._clusterIndex || 'N/A'}, 列${event._colIndex || 'N/A'}${event._isDynamic ? ' (动态)' : ''}`);
-                        });
-                    });
-                    console.groupEnd();
-                },
-                
-                // 设置调试参数
-                setDebugMode: (mode) => {
-                    this.debugMode = mode;
-                    const calendarElement = this.template.querySelector('.calendar-wrapper');
-                    if (calendarElement) {
-                        if (mode) {
-                            calendarElement.classList.add('debug-mode');
-                        } else {
-                            calendarElement.classList.remove('debug-mode');
-                        }
-                    }
-                    console.log(`[Debug] 调试模式设置为: ${mode}`);
-                },
-                
-                // 测试不同布局算法
-                testAlgorithm: (enableDynamicFill = true) => {
-                    console.log(`[Debug] 测试算法，动态占满: ${enableDynamicFill}`);
-                    // 重新构建当前视图
-                    this.buildWeekView();
-                },
-                
-                // 测试Google Calendar风格的典型场景
-                testGoogleCalendarLayout: () => {
-                    console.log('[Debug] 测试Google Calendar风格布局...');
-                    
-                    const baseTime = new Date();
-                    baseTime.setHours(9, 0, 0, 0); // 9:00 AM
-                    
-                    const testEvents = [
-                        // 场景1: 两个重叠事件 (应该各占50%宽度)
-                        {
-                            id: 'test-1', title: '会议A (9-10)', 
-                            _startTime: baseTime.getTime(), 
-                            _endTime: baseTime.getTime() + 60*60*1000,
-                            _key: 'test-1'
-                        },
-                        {
-                            id: 'test-2', title: '会议B (9:30-10:30)', 
-                            _startTime: baseTime.getTime() + 30*60*1000, 
-                            _endTime: baseTime.getTime() + 90*60*1000,
-                            _key: 'test-2'
-                        },
-                        
-                        // 场景2: 三个重叠事件 (应该各占33.33%宽度)
-                        {
-                            id: 'test-3', title: '会议C (11-12)', 
-                            _startTime: baseTime.getTime() + 2*60*60*1000, 
-                            _endTime: baseTime.getTime() + 3*60*60*1000,
-                            _key: 'test-3'
-                        },
-                        {
-                            id: 'test-4', title: '会议D (11:15-12:15)', 
-                            _startTime: baseTime.getTime() + 2.25*60*60*1000, 
-                            _endTime: baseTime.getTime() + 3.25*60*60*1000,
-                            _key: 'test-4'
-                        },
-                        {
-                            id: 'test-5', title: '会议E (11:30-12:30)', 
-                            _startTime: baseTime.getTime() + 2.5*60*60*1000, 
-                            _endTime: baseTime.getTime() + 3.5*60*60*1000,
-                            _key: 'test-5'
-                        },
-                        
-                        // 场景3: 单独事件 (应该占100%宽度)
-                        {
-                            id: 'test-6', title: '单独会议 (14-15)', 
-                            _startTime: baseTime.getTime() + 5*60*60*1000, 
-                            _endTime: baseTime.getTime() + 6*60*60*1000,
-                            _key: 'test-6'
-                        }
-                    ];
-                    
-                    // 测试静态布局
-                    console.group('[TestStatic] 静态布局测试');
-                    const staticResult = this.calculateOptimizedEventLayout(testEvents, {
-                        enableDynamicFill: false,
-                        pxPerMinute: 50/60,
-                        minEventHeight: 30
-                    });
-                    this.logLayoutResults(staticResult, '静态');
-                    console.groupEnd();
-                    
-                    // 测试动态布局
-                    console.group('[TestDynamic] 动态布局测试');
-                    const dynamicResult = this.calculateOptimizedEventLayout(testEvents, {
-                        enableDynamicFill: true,
-                        pxPerMinute: 50/60,
-                        minEventHeight: 30
-                    });
-                    this.logLayoutResults(dynamicResult, '动态');
-                    console.groupEnd();
-                    
-                    return { static: staticResult, dynamic: dynamicResult };
-                },
-                
-                // 日志布局结果的辅助函数
-                logLayoutResults: (results, type) => {
-                    console.log(`=== ${type}布局结果 ===`);
-                    results.forEach(event => {
-                        const concurrent = event._maxConcurrency || 1;
-                        const colIndex = event._colIndex || 0;
-                        console.log(`"${event.title}": 宽度=${event._width}, 位置=${event._left}, 列=${colIndex+1}/${concurrent}${event._isDynamic ? ' (动态)' : ''}`);
-                    });
-                },
-                
-                // 验证颜色修复效果
-                validateColorFix: () => this.validateColorFix(),
-                
-                // 诊断重叠事件问题
-                diagnoseOverlapIssue: () => this.diagnoseOverlapIssue(),
-                
-                // 测试重叠场景修复效果
-                testOverlapScenarios: () => this.testOverlapScenarios(),
-                
-                // 测试Google Calendar风格布局
-                testGoogleCalendarBehavior: () => this.testGoogleCalendarBehavior(),
-                
-                // 获取帮助信息
-                help: () => {
-                    console.log(`
-🔧 日历调试工具帮助
-
-可用命令：
-  calendarDebug.toggleDebug()     - 切换调试模式
-  calendarDebug.getStats()        - 获取性能统计
-  calendarDebug.reLayout()        - 手动重新布局
-  calendarDebug.showEvents()      - 显示当前事件数据
-  calendarDebug.setDebugMode(true/false) - 设置调试模式
-  calendarDebug.testAlgorithm(true/false) - 测试算法
-  calendarDebug.validateColorFix() - 验证颜色修复效果
-  calendarDebug.diagnoseOverlapIssue() - 诊断重叠事件问题
-  calendarDebug.testOverlapScenarios() - 测试重叠场景修复效果
-  calendarDebug.testGoogleCalendarBehavior() - 测试Google Calendar风格布局
-  calendarDebug.help()            - 显示此帮助信息
-
-示例：
-  calendarDebug.toggleDebug()     // 开启/关闭调试模式
-  calendarDebug.getStats()        // 查看性能统计
-  calendarDebug.showEvents()      // 查看事件布局详情
-  calendarDebug.validateColorFix() // 验证颜色修复效果
-  calendarDebug.diagnoseOverlapIssue() // 诊断重叠事件问题
-  calendarDebug.testOverlapScenarios() // 测试重叠场景修复效果
-  calendarDebug.testGoogleCalendarBehavior() // 测试Google Calendar行为
-                    `);
-                }
-            };
-            
-            console.log('🔧 日历调试工具已加载！输入 calendarDebug.help() 查看可用命令');
-        }
-    }
-
-    /**
-     * 验证颜色修复效果
-     * 检查所有事件元素是否正确应用了背景颜色
-     */
-    validateColorFix() {
-        console.group('[ColorFix Validation] 验证颜色修复效果');
-        
-        const eventElements = this.template.querySelectorAll('.grid-positioned');
-        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#06b6d4'];
-        
-        let totalEvents = 0;
-        let coloredEvents = 0;
-        let whiteEvents = 0;
-        let invalidEvents = 0;
-        
-        console.log(`找到 ${eventElements.length} 个事件元素`);
-        
-        eventElements.forEach((eventElement, index) => {
-            totalEvents++;
-            
-            const eventId = eventElement.dataset.eventId;
-            const computedStyle = window.getComputedStyle(eventElement);
-            const backgroundColor = computedStyle.backgroundColor;
-            const backgroundImage = computedStyle.backgroundImage;
-            
-            // 查找事件数据
-            let eventData = null;
-            for (const day of this.weekDays) {
-                for (const event of day.allEvents) {
-                    if (event._key === eventId) {
-                        eventData = event;
-                        break;
-                    }
-                }
-                if (eventData) break;
-            }
-            
-            // 分析颜色状态
-            let colorStatus = 'unknown';
-            let expectedColor = 'none';
-            
-            if (eventData) {
-                const colIndex = eventData._colIndex !== undefined ? eventData._colIndex : 0;
-                expectedColor = colors[colIndex % colors.length];
-                
-                // 检查是否是白色或无背景色
-                if (backgroundColor === 'rgba(0, 0, 0, 0)' || backgroundColor === 'transparent' || 
-                    backgroundColor === 'rgb(255, 255, 255)' || backgroundColor === '#ffffff') {
-                    colorStatus = 'white/transparent';
-                    whiteEvents++;
-                } else if (backgroundColor === expectedColor || 
-                          backgroundColor === this.hexToRgb(expectedColor)) {
-                    colorStatus = 'correct';
-                    coloredEvents++;
-                } else {
-                    colorStatus = 'incorrect';
-                    invalidEvents++;
-                }
-            } else {
-                invalidEvents++;
-            }
-            
-            // 详细日志
-            if (eventData) {
-                console.log(`事件 ${index + 1}: "${eventData.title}"`);
-                console.log(`  - 预期颜色: ${expectedColor}`);
-                console.log(`  - 实际背景色: ${backgroundColor}`);
-                console.log(`  - 背景图: ${backgroundImage}`);
-                console.log(`  - 状态: ${colorStatus}`);
-                console.log(`  - 列索引: ${eventData._colIndex}, 优化: ${eventData._isOptimized}`);
-            } else {
-                console.log(`事件 ${index + 1}: 未找到事件数据 (ID: ${eventId})`);
-            }
-        });
-        
-        // 汇总统计
-        console.log('\n=== 验证汇总 ===');
-        console.log(`总事件数: ${totalEvents}`);
-        console.log(`正确着色: ${coloredEvents} (${((coloredEvents/totalEvents)*100).toFixed(1)}%)`);
-        console.log(`白色/透明: ${whiteEvents} (${((whiteEvents/totalEvents)*100).toFixed(1)}%)`);
-        console.log(`颜色错误: ${invalidEvents} (${((invalidEvents/totalEvents)*100).toFixed(1)}%)`);
-        
-        // 结论
-        if (whiteEvents === 0 && invalidEvents === 0) {
-            console.log('✅ 颜色修复验证成功！所有事件都正确着色。');
-        } else if (whiteEvents > 0) {
-            console.log(`❌ 颜色修复验证失败！仍有 ${whiteEvents} 个事件显示为白色。`);
-        } else {
-            console.log(`⚠️ 颜色修复部分成功，但有 ${invalidEvents} 个事件颜色不正确。`);
-        }
-        
-        console.groupEnd();
-        
-        return {
-            total: totalEvents,
-            colored: coloredEvents,
-            white: whiteEvents,
-            invalid: invalidEvents,
-            success: whiteEvents === 0 && invalidEvents === 0
-        };
-    }
-    
-    /**
-     * 辅助函数：将hex颜色转换为rgb格式以便比较
-     */
-    hexToRgb(hex) {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        if (!result) return hex;
-        
-        const r = parseInt(result[1], 16);
-        const g = parseInt(result[2], 16);
-        const b = parseInt(result[3], 16);
-        
-        return `rgb(${r}, ${g}, ${b})`;
-    }
-
-    /**
-     * 诊断重叠事件问题
-     * 检查事件是否正确应用了并列布局
-     */
-    diagnoseOverlapIssue() {
-        console.group('[Overlap Diagnosis] 诊断重叠事件问题');
-        
-        const eventElements = this.template.querySelectorAll('.grid-positioned');
-        
-        console.log(`找到 ${eventElements.length} 个事件元素`);
-        
-        // 按天分组分析
-        const eventsByDay = {};
-        
-        eventElements.forEach((eventElement, index) => {
-            const eventId = eventElement.dataset.eventId;
-            const computedStyle = window.getComputedStyle(eventElement);
-            
-            // 查找事件数据
-            let eventData = null;
-            let dayKey = null;
-            for (const day of this.weekDays) {
-                for (const event of day.allEvents) {
-                    if (event._key === eventId) {
-                        eventData = event;
-                        dayKey = day.dateStr;
-                        break;
-                    }
-                }
-                if (eventData) break;
-            }
-            
-            if (eventData && dayKey) {
-                if (!eventsByDay[dayKey]) {
-                    eventsByDay[dayKey] = [];
-                }
-                
-                eventsByDay[dayKey].push({
-                    title: eventData.title,
-                    startTime: eventData._startTime,
-                    endTime: eventData._endTime,
-                    isOptimized: eventData._isOptimized,
-                    expectedWidth: eventData._width,
-                    expectedLeft: eventData._left,
-                    actualWidth: computedStyle.width,
-                    actualLeft: computedStyle.left,
-                    actualTop: computedStyle.top,
-                    colIndex: eventData._colIndex,
-                    maxConcurrency: eventData._maxConcurrency,
-                    position: computedStyle.position
-                });
-            }
-        });
-        
-        // 分析每天的重叠情况
-        Object.keys(eventsByDay).forEach(dayKey => {
-            const dayEvents = eventsByDay[dayKey];
-            console.log(`\n=== ${dayKey} (${dayEvents.length} 个事件) ===`);
-            
-            // 检查重叠事件
-            const overlappingGroups = this.findOverlappingEvents(dayEvents);
-            
-            overlappingGroups.forEach((group, groupIndex) => {
-                if (group.length > 1) {
-                    console.log(`\n重叠组 ${groupIndex + 1} (${group.length} 个事件):`);
-                    
-                    group.forEach((event, eventIndex) => {
-                        const startTime = new Date(event.startTime).toLocaleTimeString('en-US', {
-                            hour: 'numeric', minute: '2-digit', hour12: true
-                        });
-                        const endTime = new Date(event.endTime).toLocaleTimeString('en-US', {
-                            hour: 'numeric', minute: '2-digit', hour12: true
-                        });
-                        
-                        console.log(`  事件 ${eventIndex + 1}: "${event.title}" (${startTime} - ${endTime})`);
-                        console.log(`    优化算法: ${event.isOptimized ? '✅' : '❌'}`);
-                        console.log(`    预期宽度: ${event.expectedWidth} → 实际宽度: ${event.actualWidth}`);
-                        console.log(`    预期位置: ${event.expectedLeft} → 实际位置: ${event.actualLeft}`);
-                        console.log(`    列索引: ${event.colIndex}/${event.maxConcurrency}`);
-                        console.log(`    定位方式: ${event.position}`);
-                        
-                        // 检查是否正确并列
-                        const expectedWidthPercent = parseFloat(event.expectedWidth);
-                        const actualWidthPercent = (parseFloat(event.actualWidth) / eventElement.parentElement.clientWidth) * 100;
-                        
-                        if (Math.abs(expectedWidthPercent - actualWidthPercent) > 5) {
-                            console.log(`    ⚠️  宽度不匹配！预期 ${expectedWidthPercent}%, 实际 ${actualWidthPercent}%`);
-                        }
-                    });
-                } else {
-                    const event = group[0];
-                    const startTime = new Date(event.startTime).toLocaleTimeString('en-US', {
-                        hour: 'numeric', minute: '2-digit', hour12: true
-                    });
-                    const endTime = new Date(event.endTime).toLocaleTimeString('en-US', {
-                        hour: 'numeric', minute: '2-digit', hour12: true
-                    });
-                    
-                    console.log(`\n单独事件: "${event.title}" (${startTime} - ${endTime})`);
-                    console.log(`  优化算法: ${event.isOptimized ? '✅' : '❌'}`);
-                    console.log(`  宽度: ${event.expectedWidth} → ${event.actualWidth}`);
-                    
-                    // 单独事件应该是100%宽度
-                    if (event.expectedWidth !== '100%' && event.expectedWidth !== '100.00%') {
-                        console.log(`  ⚠️  单独事件宽度不是100%: ${event.expectedWidth}`);
-                    }
-                }
-            });
-        });
-        
-        console.groupEnd();
-        return eventsByDay;
-    }
-    
-    /**
-     * 辅助函数：查找重叠事件
-     */
-    findOverlappingEvents(events) {
-        const groups = [];
-        const processed = new Set();
-        
-        events.forEach(event => {
-            if (processed.has(event.title)) return;
-            
-            const group = [event];
-            processed.add(event.title);
-            
-            // 查找与当前事件重叠的其他事件
-            events.forEach(otherEvent => {
-                if (processed.has(otherEvent.title)) return;
-                
-                // 检查时间重叠
-                if (event.startTime < otherEvent.endTime && event.endTime > otherEvent.startTime) {
-                    group.push(otherEvent);
-                    processed.add(otherEvent.title);
-                }
-            });
-            
-            groups.push(group);
-        });
-        
-        return groups;
-    }
-
-    /**
-     * 测试重叠场景修复效果
-     * 验证不同重叠情况的显示是否正确
-     */
-    testOverlapScenarios() {
-        console.group('[Overlap Test] 测试重叠场景修复效果');
-        
-        // 运行诊断并获取结果
-        const diagnosis = this.diagnoseOverlapIssue();
-        
-        console.log('\n=== 重叠场景测试总结 ===');
-        
-        let totalOverlapGroups = 0;
-        let correctlyDisplayed = 0;
-        let issuesFound = 0;
-        
-        Object.keys(diagnosis).forEach(dayKey => {
-            const dayEvents = diagnosis[dayKey];
-            const overlappingGroups = this.findOverlappingEvents(dayEvents);
-            
-            overlappingGroups.forEach(group => {
-                if (group.length > 1) {
-                    totalOverlapGroups++;
-                    const groupIsCorrect = this.validateOverlapGroup(group);
-                    
-                    if (groupIsCorrect) {
-                        correctlyDisplayed++;
-                    } else {
-                        issuesFound++;
-                        console.log(`❌ 问题组 (${dayKey}): ${group.map(e => e.title).join(', ')}`);
-                    }
-                }
-            });
-        });
-        
-        console.log(`\n📊 测试结果统计:`);
-        console.log(`总重叠组数: ${totalOverlapGroups}`);
-        console.log(`正确显示: ${correctlyDisplayed} (${totalOverlapGroups > 0 ? ((correctlyDisplayed/totalOverlapGroups)*100).toFixed(1) : '0'}%)`);
-        console.log(`存在问题: ${issuesFound} (${totalOverlapGroups > 0 ? ((issuesFound/totalOverlapGroups)*100).toFixed(1) : '0'}%)`);
-        
-        if (issuesFound === 0 && totalOverlapGroups > 0) {
-            console.log('✅ 所有重叠场景测试通过！事件正确并列显示。');
-        } else if (totalOverlapGroups === 0) {
-            console.log('ℹ️  当前没有重叠事件，无法测试重叠场景。');
-        } else {
-            console.log(`⚠️  发现 ${issuesFound} 个问题，需要进一步调试。`);
-        }
-        
-        // 提供期望的行为示例
-        console.log('\n📝 期望行为:');
-        console.log('• 2个重叠事件 → 每个宽度50%，并列显示');
-        console.log('• 3个重叠事件 → 每个宽度33.33%，三列并列');
-        console.log('• 4个重叠事件 → 每个宽度25%，四列并列');
-        console.log('• 无重叠事件 → 宽度100%，独占一行');
-        
-        console.groupEnd();
-        
-        return {
-            totalGroups: totalOverlapGroups,
-            correctGroups: correctlyDisplayed,
-            issueGroups: issuesFound,
-            success: issuesFound === 0 && totalOverlapGroups > 0
-        };
-    }
-    
-    /**
-     * 验证重叠组是否正确显示
-     */
-    validateOverlapGroup(group) {
-        const expectedWidthPercent = 100 / group.length;
-        const tolerance = 2; // 2%容差
-        
-        for (let i = 0; i < group.length; i++) {
-            const event = group[i];
-            const actualWidthPercent = parseFloat(event.expectedWidth);
-            const expectedLeftPercent = i * expectedWidthPercent;
-            const actualLeftPercent = parseFloat(event.expectedLeft);
-            
-            // 检查宽度
-            if (Math.abs(actualWidthPercent - expectedWidthPercent) > tolerance) {
-                console.log(`  宽度错误: "${event.title}" 期望${expectedWidthPercent.toFixed(1)}%, 实际${actualWidthPercent}%`);
-                return false;
-            }
-            
-            // 检查位置 (注意：实际算法可能重新排序事件)
-            // 我们主要关心宽度正确，位置可能因为算法优化而调整
-        }
-        
-        return true;
-    }
-
-    /**
-     * 测试Google Calendar风格布局行为
-     * 验证所有关键要求是否满足
-     */
-    testGoogleCalendarBehavior() {
-        console.group('[Google Calendar Test] 测试布局行为');
-        
-        const baseTime = new Date();
-        baseTime.setHours(8, 0, 0, 0); // 8:00 AM
-        
-        // 测试案例1: 长事件和短事件重叠
-        const testCase1 = [
-            {
-                title: '长事件 (8:00-17:30)',
-                _startTime: baseTime.getTime(),
-                _endTime: baseTime.getTime() + 9.5 * 60 * 60 * 1000, // 9.5 hours
-                _key: 'long-event'
-            },
-            {
-                title: '短事件 (14:30-15:00)',
-                _startTime: baseTime.getTime() + 6.5 * 60 * 60 * 1000, // 6.5 hours later
-                _endTime: baseTime.getTime() + 7 * 60 * 60 * 1000, // 7 hours later
-                _key: 'short-event'
-            }
-        ];
-        
-        // 测试案例2: 三个部分重叠事件
-        const testCase2 = [
-            {
-                title: '事件A (15:00-16:00)',
-                _startTime: baseTime.getTime() + 7 * 60 * 60 * 1000,
-                _endTime: baseTime.getTime() + 8 * 60 * 60 * 1000,
-                _key: 'event-a'
-            },
-            {
-                title: '事件B (15:15-15:45)',
-                _startTime: baseTime.getTime() + 7.25 * 60 * 60 * 1000,
-                _endTime: baseTime.getTime() + 7.75 * 60 * 60 * 1000,
-                _key: 'event-b'
-            },
-            {
-                title: '事件C (15:30-16:30)',
-                _startTime: baseTime.getTime() + 7.5 * 60 * 60 * 1000,
-                _endTime: baseTime.getTime() + 8.5 * 60 * 60 * 1000,
-                _key: 'event-c'
-            }
-        ];
-        
-        // 测试案例3: 仅触摸的连续事件
-        const testCase3 = [
-            {
-                title: '事件1 (10:00-11:00)',
-                _startTime: baseTime.getTime() + 2 * 60 * 60 * 1000,
-                _endTime: baseTime.getTime() + 3 * 60 * 60 * 1000,
-                _key: 'event-1'
-            },
-            {
-                title: '事件2 (11:00-12:00)',
-                _startTime: baseTime.getTime() + 3 * 60 * 60 * 1000,
-                _endTime: baseTime.getTime() + 4 * 60 * 60 * 1000,
-                _key: 'event-2'
-            }
-        ];
-        
-        const testCases = [
-            { name: '长短事件重叠', events: testCase1, expected: { maxWidth: 50, minWidth: 50 } },
-            { name: '三事件部分重叠', events: testCase2, expected: { maxWidth: 33.33, minWidth: 33.33 } },
-            { name: '触摸连续事件', events: testCase3, expected: { maxWidth: 100, minWidth: 100 } }
-        ];
-        
-        let passedTests = 0;
-        let totalTests = testCases.length;
-        
-        testCases.forEach((testCase, index) => {
-            console.log(`\n=== 测试 ${index + 1}: ${testCase.name} ===`);
-            
-            try {
-                const result = this.calculateOptimizedEventLayout(testCase.events, {
-                    enableDynamicFill: true,
-                    pxPerMinute: 50/60,
-                    minEventHeight: 30
-                });
-                
-                let testPassed = true;
-                const actualWidths = result.map(event => parseFloat(event._width));
-                
-                console.log('布局结果:');
-                result.forEach(event => {
-                    const startTime = new Date(event._startTime).toLocaleTimeString('en-US', {
-                        hour: 'numeric', minute: '2-digit', hour12: true
-                    });
-                    const endTime = new Date(event._endTime).toLocaleTimeString('en-US', {
-                        hour: 'numeric', minute: '2-digit', hour12: true
-                    });
-                    console.log(`  "${event.title}" (${startTime}-${endTime}): 宽度=${event._width}, 位置=${event._left}`);
-                });
-                
-                // 验证基本要求
-                if (testCase.name === '触摸连续事件') {
-                    // 触摸事件应该不重叠，各占100%
-                    const allFullWidth = actualWidths.every(width => Math.abs(width - 100) < 1);
-                    if (!allFullWidth) {
-                        console.log('❌ 触摸事件应该各占100%宽度');
-                        testPassed = false;
-                    }
-                } else {
-                    // 重叠事件应该有相同的较小宽度
-                    const expectedWidth = testCase.expected.maxWidth;
-                    const correctWidths = actualWidths.every(width => Math.abs(width - expectedWidth) < 1);
-                    if (!correctWidths) {
-                        console.log(`❌ 重叠事件宽度应该约为${expectedWidth}%`);
-                        testPassed = false;
-                    }
-                }
-                
-                // 验证无事件被隐藏（所有事件都有合理的位置）
-                const allVisible = result.every(event => {
-                    const left = parseFloat(event._left);
-                    const width = parseFloat(event._width);
-                    return left >= 0 && left + width <= 100;
-                });
-                
-                if (!allVisible) {
-                    console.log('❌ 有事件位置超出边界');
-                    testPassed = false;
-                }
-                
-                if (testPassed) {
-                    console.log('✅ 测试通过');
-                    passedTests++;
-                } else {
-                    console.log('❌ 测试失败');
-                }
-                
-            } catch (error) {
-                console.log(`❌ 测试异常: ${error.message}`);
-            }
-        });
-        
-        console.log(`\n📊 测试总结: ${passedTests}/${totalTests} 通过`);
-        
-        if (passedTests === totalTests) {
-            console.log('🎉 所有Google Calendar行为测试通过！');
-        } else {
-            console.log('⚠️  部分测试失败，需要进一步调试');
-        }
-        
-        console.groupEnd();
-        
-        return {
-            passed: passedTests,
-            total: totalTests,
-            success: passedTests === totalTests
         };
     }
 
