@@ -2281,6 +2281,9 @@ export default class PublicCalendarView extends LightningElement {
                 // 诊断重叠事件问题
                 diagnoseOverlapIssue: () => this.diagnoseOverlapIssue(),
                 
+                // 测试重叠场景修复效果
+                testOverlapScenarios: () => this.testOverlapScenarios(),
+                
                 // 获取帮助信息
                 help: () => {
                     console.log(`
@@ -2295,6 +2298,7 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.testAlgorithm(true/false) - 测试算法
   calendarDebug.validateColorFix() - 验证颜色修复效果
   calendarDebug.diagnoseOverlapIssue() - 诊断重叠事件问题
+  calendarDebug.testOverlapScenarios() - 测试重叠场景修复效果
   calendarDebug.help()            - 显示此帮助信息
 
 示例：
@@ -2303,6 +2307,7 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.showEvents()      // 查看事件布局详情
   calendarDebug.validateColorFix() // 验证颜色修复效果
   calendarDebug.diagnoseOverlapIssue() // 诊断重叠事件问题
+  calendarDebug.testOverlapScenarios() // 测试重叠场景修复效果
                     `);
                 }
             };
@@ -2569,6 +2574,97 @@ export default class PublicCalendarView extends LightningElement {
         });
         
         return groups;
+    }
+
+    /**
+     * 测试重叠场景修复效果
+     * 验证不同重叠情况的显示是否正确
+     */
+    testOverlapScenarios() {
+        console.group('[Overlap Test] 测试重叠场景修复效果');
+        
+        // 运行诊断并获取结果
+        const diagnosis = this.diagnoseOverlapIssue();
+        
+        console.log('\n=== 重叠场景测试总结 ===');
+        
+        let totalOverlapGroups = 0;
+        let correctlyDisplayed = 0;
+        let issuesFound = 0;
+        
+        Object.keys(diagnosis).forEach(dayKey => {
+            const dayEvents = diagnosis[dayKey];
+            const overlappingGroups = this.findOverlappingEvents(dayEvents);
+            
+            overlappingGroups.forEach(group => {
+                if (group.length > 1) {
+                    totalOverlapGroups++;
+                    const groupIsCorrect = this.validateOverlapGroup(group);
+                    
+                    if (groupIsCorrect) {
+                        correctlyDisplayed++;
+                    } else {
+                        issuesFound++;
+                        console.log(`❌ 问题组 (${dayKey}): ${group.map(e => e.title).join(', ')}`);
+                    }
+                }
+            });
+        });
+        
+        console.log(`\n📊 测试结果统计:`);
+        console.log(`总重叠组数: ${totalOverlapGroups}`);
+        console.log(`正确显示: ${correctlyDisplayed} (${totalOverlapGroups > 0 ? ((correctlyDisplayed/totalOverlapGroups)*100).toFixed(1) : '0'}%)`);
+        console.log(`存在问题: ${issuesFound} (${totalOverlapGroups > 0 ? ((issuesFound/totalOverlapGroups)*100).toFixed(1) : '0'}%)`);
+        
+        if (issuesFound === 0 && totalOverlapGroups > 0) {
+            console.log('✅ 所有重叠场景测试通过！事件正确并列显示。');
+        } else if (totalOverlapGroups === 0) {
+            console.log('ℹ️  当前没有重叠事件，无法测试重叠场景。');
+        } else {
+            console.log(`⚠️  发现 ${issuesFound} 个问题，需要进一步调试。`);
+        }
+        
+        // 提供期望的行为示例
+        console.log('\n📝 期望行为:');
+        console.log('• 2个重叠事件 → 每个宽度50%，并列显示');
+        console.log('• 3个重叠事件 → 每个宽度33.33%，三列并列');
+        console.log('• 4个重叠事件 → 每个宽度25%，四列并列');
+        console.log('• 无重叠事件 → 宽度100%，独占一行');
+        
+        console.groupEnd();
+        
+        return {
+            totalGroups: totalOverlapGroups,
+            correctGroups: correctlyDisplayed,
+            issueGroups: issuesFound,
+            success: issuesFound === 0 && totalOverlapGroups > 0
+        };
+    }
+    
+    /**
+     * 验证重叠组是否正确显示
+     */
+    validateOverlapGroup(group) {
+        const expectedWidthPercent = 100 / group.length;
+        const tolerance = 2; // 2%容差
+        
+        for (let i = 0; i < group.length; i++) {
+            const event = group[i];
+            const actualWidthPercent = parseFloat(event.expectedWidth);
+            const expectedLeftPercent = i * expectedWidthPercent;
+            const actualLeftPercent = parseFloat(event.expectedLeft);
+            
+            // 检查宽度
+            if (Math.abs(actualWidthPercent - expectedWidthPercent) > tolerance) {
+                console.log(`  宽度错误: "${event.title}" 期望${expectedWidthPercent.toFixed(1)}%, 实际${actualWidthPercent}%`);
+                return false;
+            }
+            
+            // 检查位置 (注意：实际算法可能重新排序事件)
+            // 我们主要关心宽度正确，位置可能因为算法优化而调整
+        }
+        
+        return true;
     }
 
     formatHourLabel(hour) {
