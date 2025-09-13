@@ -761,13 +761,18 @@ export default class PublicCalendarView extends LightningElement {
         let pattern = event.recurrencePatternText || '';
         // console.log('[ExpandRecurring] 🔍 Analyzing pattern (raw):', pattern);
 
-        // Frontend fallback: if record is recurring but pattern is missing (FLS/caching/serialization),
-        // assume a conservative daily pattern for 30 occurrences so events still render.
+        // FIXED: If no recurrence pattern is available, don't assume defaults
+        // Instead, return the original event as a single instance to avoid incorrect expansion
         if ((!pattern || pattern.trim().length === 0) && (event.isRecurring || event.isRecurringEnhanced || event.isRecurringClassic || event.recurrenceActivityId)) {
-            // console.warn('[ExpandRecurring] ⚠️ No recurrence pattern text but recurring flags detected; applying SAFE DEFAULT RRULE (DAILY x30). Title:', event.title);
-            // Extra explicit log for easier searching in console
-            // console.warn('No recurrence pattern text but recurring flags');
-            pattern = 'FREQ=DAILY;INTERVAL=1;COUNT=30';
+            console.warn('[ExpandRecurring] ⚠️ No recurrence pattern text available for recurring event, returning as single instance. Title:', event.title);
+            console.warn('[ExpandRecurring] Event flags:', {
+                isRecurring: event.isRecurring,
+                isRecurringEnhanced: event.isRecurringEnhanced,
+                isRecurringClassic: event.isRecurringClassic,
+                recurrenceActivityId: event.recurrenceActivityId,
+                patternText: event.recurrencePatternText
+            });
+            return [event]; // Return original event as single instance
         }
 
         // Simple daily recurrence expansion (FREQ=DAILY)
@@ -778,13 +783,16 @@ export default class PublicCalendarView extends LightningElement {
             const countMatch = pattern.match(/COUNT=(\d+)/);
             
             const interval = intervalMatch ? parseInt(intervalMatch[1]) : 1;
-            const count = countMatch ? parseInt(countMatch[1]) : 30; // Default to 30 occurrences
+            const count = countMatch ? parseInt(countMatch[1]) : 1; // FIXED: Default to 1 occurrence, not 30
             
-            // console.log('[ExpandRecurring] Pattern details:', {
-            //     interval: interval + ' days',
-            //     count: count + ' occurrences',
-            //     maxInstances: maxInstances
-            // });
+            // CRITICAL DEBUG: Log expansion details
+            console.log(`[ExpandRecurring] 🎯 EXPANDING "${event.title}":`, {
+                pattern: pattern,
+                interval: interval + ' days',
+                count: count + ' occurrences',
+                maxInstances: maxInstances,
+                originalStart: event._start ? event._start.toString() : 'NO_START'
+            });
             
             // ========== RECURRING EVENT TIME FIX - START ==========
             // Preserve original time components to avoid DST and precision issues
@@ -847,7 +855,7 @@ export default class PublicCalendarView extends LightningElement {
                 // ========== DATE ADVANCEMENT FIX - END ==========
             }
             
-            // console.log(`[ExpandRecurring] 🎯 RESULT: Generated ${instances.length} daily instances for: "${event.title}"`);;
+            console.log(`[ExpandRecurring] ✅ RESULT: Generated ${instances.length} daily instances for: "${event.title}" (Expected: ${count})`);;
         }
         // Add more recurrence patterns here (weekly, monthly, etc.) as needed
         else if (pattern.includes('FREQ=WEEKLY')) {
