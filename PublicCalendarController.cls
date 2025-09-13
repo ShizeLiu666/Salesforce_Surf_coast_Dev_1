@@ -138,8 +138,8 @@ public without sharing class PublicCalendarController {
                 LIMIT 250
             ];
             
-            // 2. Get recurring events — NOW date-bounded like singles
-            // Includes classic/enhanced masters and also instances (RecurrenceActivityId != null)
+            // 2. Get recurring events — FIXED: Only get master records, not system instances
+            // Only includes classic/enhanced masters (RecurrenceActivityId = null)
             List<Event> recurringMasters = [
                 SELECT Id, Subject, 
                        StartDateTime, EndDateTime, ActivityDate, IsAllDayEvent, DurationInMinutes,
@@ -149,7 +149,8 @@ public without sharing class PublicCalendarController {
                 FROM Event
                 WHERE OwnerId = :targetCalendarId
                 AND IsDeleted = false
-                AND (IsRecurrence2 = true OR IsRecurrence = true OR RecurrenceActivityId != null)
+                AND (IsRecurrence2 = true OR IsRecurrence = true)
+                AND RecurrenceActivityId = null
                 AND (
                     (StartDateTime < :rangeEnd AND EndDateTime > :rangeStart)
                     OR (IsAllDayEvent = true AND ActivityDate >= :startDate AND ActivityDate <= :endDate)
@@ -157,7 +158,7 @@ public without sharing class PublicCalendarController {
                 ORDER BY StartDateTime ASC, ActivityDate ASC
                 LIMIT 1000
             ];
-            System.debug('Parity note: recurring query is date-bounded and includes RecurrenceActivityId != null to align with testRecurringEvents');
+            System.debug('FIXED: recurring query now only returns master records, excluding system instances to prevent duplication');
             
             // Combine both lists
             List<Event> events = new List<Event>();
