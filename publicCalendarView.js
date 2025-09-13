@@ -156,11 +156,22 @@ export default class PublicCalendarView extends LightningElement {
                     eventElement.style.left = eventData._left || '0%';
                     eventElement.style.zIndex = '10';
                     
-                    // 应用颜色（基于列索引）
-                    const colorIndex = eventData._colIndex !== undefined ? 
-                        eventData._colIndex % colors.length : 0;
+                    // 修复颜色应用逻辑
+                    const colIndex = eventData._colIndex !== undefined ? eventData._colIndex : 0;
+                    const colorIndex = colIndex % colors.length;
                     const color = colors[colorIndex];
+                    
+                    // 强制应用颜色，确保覆盖所有CSS样式
+                    eventElement.style.removeProperty('background'); // 移除可能的background简写
+                    eventElement.style.removeProperty('background-image'); // 移除背景图
+                    eventElement.style.backgroundColor = color;
                     eventElement.style.setProperty('background-color', color, 'important');
+                    
+                    // 确保文字可见
+                    eventElement.style.color = '#ffffff';
+                    eventElement.style.setProperty('color', '#ffffff', 'important');
+                    
+                    console.log(`[ColorFix] "${eventData.title}": 列${colIndex} → 颜色${colorIndex} → ${color}`);
                     
                     // ========== Google Calendar风格布局信息 ==========
                     const startTime = eventData._startTime ? 
@@ -232,6 +243,10 @@ export default class PublicCalendarView extends LightningElement {
                         if (eventData._colorIndex !== undefined) {
                             const color = colors[eventData._colorIndex % colors.length];
                             eventElement.style.setProperty('background-color', color, 'important');
+                        } else {
+                            // 备用颜色机制
+                            const fallbackColor = colors[0];
+                            eventElement.style.setProperty('background-color', fallbackColor, 'important');
                         }
                     } else {
                         eventElement.style.left = '0px';
@@ -2254,6 +2269,9 @@ export default class PublicCalendarView extends LightningElement {
                     });
                 },
                 
+                // 验证颜色修复效果
+                validateColorFix: () => this.validateColorFix(),
+                
                 // 获取帮助信息
                 help: () => {
                     console.log(`
@@ -2266,18 +2284,136 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.showEvents()      - 显示当前事件数据
   calendarDebug.setDebugMode(true/false) - 设置调试模式
   calendarDebug.testAlgorithm(true/false) - 测试算法
+  calendarDebug.validateColorFix() - 验证颜色修复效果
   calendarDebug.help()            - 显示此帮助信息
 
 示例：
   calendarDebug.toggleDebug()     // 开启/关闭调试模式
   calendarDebug.getStats()        // 查看性能统计
   calendarDebug.showEvents()      // 查看事件布局详情
+  calendarDebug.validateColorFix() // 验证颜色修复效果
                     `);
                 }
             };
             
             console.log('🔧 日历调试工具已加载！输入 calendarDebug.help() 查看可用命令');
         }
+    }
+
+    /**
+     * 验证颜色修复效果
+     * 检查所有事件元素是否正确应用了背景颜色
+     */
+    validateColorFix() {
+        console.group('[ColorFix Validation] 验证颜色修复效果');
+        
+        const eventElements = this.template.querySelectorAll('.grid-positioned');
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#06b6d4'];
+        
+        let totalEvents = 0;
+        let coloredEvents = 0;
+        let whiteEvents = 0;
+        let invalidEvents = 0;
+        
+        console.log(`找到 ${eventElements.length} 个事件元素`);
+        
+        eventElements.forEach((eventElement, index) => {
+            totalEvents++;
+            
+            const eventId = eventElement.dataset.eventId;
+            const computedStyle = window.getComputedStyle(eventElement);
+            const backgroundColor = computedStyle.backgroundColor;
+            const backgroundImage = computedStyle.backgroundImage;
+            
+            // 查找事件数据
+            let eventData = null;
+            for (const day of this.weekDays) {
+                for (const event of day.allEvents) {
+                    if (event._key === eventId) {
+                        eventData = event;
+                        break;
+                    }
+                }
+                if (eventData) break;
+            }
+            
+            // 分析颜色状态
+            let colorStatus = 'unknown';
+            let expectedColor = 'none';
+            
+            if (eventData) {
+                const colIndex = eventData._colIndex !== undefined ? eventData._colIndex : 0;
+                expectedColor = colors[colIndex % colors.length];
+                
+                // 检查是否是白色或无背景色
+                if (backgroundColor === 'rgba(0, 0, 0, 0)' || backgroundColor === 'transparent' || 
+                    backgroundColor === 'rgb(255, 255, 255)' || backgroundColor === '#ffffff') {
+                    colorStatus = 'white/transparent';
+                    whiteEvents++;
+                } else if (backgroundColor === expectedColor || 
+                          backgroundColor === this.hexToRgb(expectedColor)) {
+                    colorStatus = 'correct';
+                    coloredEvents++;
+                } else {
+                    colorStatus = 'incorrect';
+                    invalidEvents++;
+                }
+            } else {
+                invalidEvents++;
+            }
+            
+            // 详细日志
+            if (eventData) {
+                console.log(`事件 ${index + 1}: "${eventData.title}"`);
+                console.log(`  - 预期颜色: ${expectedColor}`);
+                console.log(`  - 实际背景色: ${backgroundColor}`);
+                console.log(`  - 背景图: ${backgroundImage}`);
+                console.log(`  - 状态: ${colorStatus}`);
+                console.log(`  - 列索引: ${eventData._colIndex}, 优化: ${eventData._isOptimized}`);
+            } else {
+                console.log(`事件 ${index + 1}: 未找到事件数据 (ID: ${eventId})`);
+            }
+        });
+        
+        // 汇总统计
+        console.log('\n=== 验证汇总 ===');
+        console.log(`总事件数: ${totalEvents}`);
+        console.log(`正确着色: ${coloredEvents} (${((coloredEvents/totalEvents)*100).toFixed(1)}%)`);
+        console.log(`白色/透明: ${whiteEvents} (${((whiteEvents/totalEvents)*100).toFixed(1)}%)`);
+        console.log(`颜色错误: ${invalidEvents} (${((invalidEvents/totalEvents)*100).toFixed(1)}%)`);
+        
+        // 结论
+        if (whiteEvents === 0 && invalidEvents === 0) {
+            console.log('✅ 颜色修复验证成功！所有事件都正确着色。');
+        } else if (whiteEvents > 0) {
+            console.log(`❌ 颜色修复验证失败！仍有 ${whiteEvents} 个事件显示为白色。`);
+        } else {
+            console.log(`⚠️ 颜色修复部分成功，但有 ${invalidEvents} 个事件颜色不正确。`);
+        }
+        
+        console.groupEnd();
+        
+        return {
+            total: totalEvents,
+            colored: coloredEvents,
+            white: whiteEvents,
+            invalid: invalidEvents,
+            success: whiteEvents === 0 && invalidEvents === 0
+        };
+    }
+    
+    /**
+     * 辅助函数：将hex颜色转换为rgb格式以便比较
+     */
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if (!result) return hex;
+        
+        const r = parseInt(result[1], 16);
+        const g = parseInt(result[2], 16);
+        const b = parseInt(result[3], 16);
+        
+        return `rgb(${r}, ${g}, ${b})`;
     }
 
     formatHourLabel(hour) {

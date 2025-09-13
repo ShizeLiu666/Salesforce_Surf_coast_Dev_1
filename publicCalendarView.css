@@ -908,7 +908,7 @@
 
 /* 动态布局事件的增强效果 */
 .event-block.grid-positioned.dynamic-layout {
-    background: linear-gradient(135deg, currentColor 0%, currentColor 85%, rgba(34, 197, 94, 0.3) 85%, rgba(34, 197, 94, 0.3) 100%);
+    /* 移除可能干扰背景色的样式，让JavaScript设置的颜色生效 */
     position: relative;
 }
 
