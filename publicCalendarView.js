@@ -58,8 +58,6 @@ export default class PublicCalendarView extends LightningElement {
     }
 
     renderedCallback() {
-        console.log('[RenderedCallback] Called with weekDays length:', this.weekDays.length);
-        console.log('[RenderedCallback] Total events:', this.events.length);
         
         // Always ensure scroll functionality works
         this.ensureScrollFunctionality();
@@ -73,8 +71,6 @@ export default class PublicCalendarView extends LightningElement {
         const gutter = this.template.querySelector('.week-time-column');
         
         if (days && gutter) {
-            console.log('[Scroll] Ensuring scroll functionality');
-            console.log('[Scroll] Days element scrollHeight:', days.scrollHeight, 'clientHeight:', days.clientHeight);
             
             // Remove existing listener if any
             if (this._syncScroll) {
@@ -84,26 +80,22 @@ export default class PublicCalendarView extends LightningElement {
             // Create new scroll sync function
             this._syncScroll = () => { 
                 gutter.scrollTop = days.scrollTop; 
-                console.log('[Scroll] Synced to:', days.scrollTop);
             };
             
             // Add scroll listener
             days.addEventListener('scroll', this._syncScroll);
             this._scrollSynced = true;
-            console.log('[Scroll] Scroll sync attached, scrollable height:', days.scrollHeight - days.clientHeight);
             
             // Make scroll methods available in console for debugging
             window.calendarScrollTo = (position) => {
                 days.scrollTop = position;
                 gutter.scrollTop = position;
-                console.log('[Debug] Manually scrolled to:', position);
             };
             
             window.calendarScrollToBottom = () => {
                 const maxScroll = days.scrollHeight - days.clientHeight;
                 days.scrollTop = maxScroll;
                 gutter.scrollTop = maxScroll;
-                console.log('[Debug] Scrolled to bottom:', maxScroll);
             };
             
             // Auto-scroll to 4 AM only on initial load
@@ -112,14 +104,15 @@ export default class PublicCalendarView extends LightningElement {
                 this._hasAutoScrolled = true;
             }
         } else {
-            console.warn('[Scroll] Could not find scroll elements:', { days: !!days, gutter: !!gutter });
         }
     }
 
     applyGridPositioning() {
         // Apply grid positioning styles to events with concurrent event layout
         const eventElements = this.template.querySelectorAll('.grid-positioned');
-        console.log('[GridPositioning] Found', eventElements.length, 'event elements in DOM');
+        
+        // DEBUG: Track applyGridPositioning calls
+        console.log(`[ApplyGrid] Called with ${eventElements.length} event elements`);
         
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
         
@@ -144,40 +137,61 @@ export default class PublicCalendarView extends LightningElement {
                 eventElement.style.height = `${eventData._height}px`;
                 eventElement.style.zIndex = '10';
                 
-                // 简洁的并发事件布局 - 只解决重叠问题
+                // Simple concurrent event layout - only solve overlap issues
                 if (eventData._totalInGroup !== undefined && eventData._totalInGroup > 1) {
                     const containerWidth = eventElement.parentElement.clientWidth;
                     const availableWidth = containerWidth;
                     const eventWidth = Math.floor(availableWidth / eventData._totalInGroup);
-                    const leftPosition = eventData._eventIndex * eventWidth;
+                    // Fix: use _columnIndex instead of _eventIndex
+                    const columnIndex = eventData._columnIndex !== undefined ? eventData._columnIndex : eventData._eventIndex;
+                    const leftPosition = columnIndex * eventWidth;
                     
-                    // 基础定位
+                    // DEBUG: Thu 11 positioning
+                    if (eventData.title && (eventData.title.includes('Kate testing') || eventData.title.includes('Call'))) {
+                        console.log('POSITIONING CALCULATION:');
+                        console.log(`Event: "${eventData.title}" (Key: ${eventData._key})`);
+                        console.log(`containerWidth: ${containerWidth}px`);
+                        console.log(`totalInGroup: ${eventData._totalInGroup}`);
+                        console.log(`eventIndex: ${eventData._eventIndex} (old)`);
+                        console.log(`columnIndex: ${columnIndex} (new - FIXED)`);
+                        console.log(`eventWidth: ${eventWidth}px (${containerWidth}/${eventData._totalInGroup})`);
+                        console.log(`leftPosition: ${leftPosition}px (${columnIndex} * ${eventWidth})`);
+                        console.log(`topPosition: ${eventData._topPosition}px`);
+                        console.log(`Element ID: ${eventElement.dataset.eventId}`);
+                        console.log('---');
+                    }
+                    
+                    // Basic positioning
                     eventElement.style.left = `${leftPosition}px`;
                     eventElement.style.width = `${eventWidth}px`;
                     eventElement.style.right = 'auto';
                     
-                    // 应用不同颜色
+                    // Apply different colors
                     if (eventData._colorIndex !== undefined) {
                         const color = colors[eventData._colorIndex];
                         eventElement.style.setProperty('background-color', color, 'important');
                     }
                     
-                    console.log('[GridPositioning] Applied simple layout to', eventData.title, {
-                        eventIndex: eventData._eventIndex,
-                        totalInGroup: eventData._totalInGroup,
-                        eventWidth: eventWidth,
-                        leftPosition: leftPosition
-                    });
+                    // Add special style class for recurring events
+                    if (eventData.isRecurring) {
+                        eventElement.classList.add('recurring-event');
+                    }
+                    
                 } else {
-                    // 单个事件 - 全宽度
+                    // Single event - full width
                     eventElement.style.left = '0px';
                     eventElement.style.right = '0px';
                     eventElement.style.width = 'auto';
                     
-                    // 单个事件也应用颜色
+                    // Single event also applies color
                     if (eventData._colorIndex !== undefined) {
                         const color = colors[eventData._colorIndex];
                         eventElement.style.setProperty('background-color', color, 'important');
+                    }
+                    
+                    // Add special style class for recurring events
+                    if (eventData.isRecurring) {
+                        eventElement.classList.add('recurring-event');
                     }
                 }
             }
@@ -193,16 +207,12 @@ export default class PublicCalendarView extends LightningElement {
             const days = this.template.querySelector('.week-days-grid');
             const gutter = this.template.querySelector('.week-time-column');
             if (days && gutter) {
-                console.log('[Scroll] Auto-scrolling to 4 AM at position:', scrollPosition);
-                console.log('[Scroll] Available scroll height:', days.scrollHeight);
-                console.log('[Scroll] Container height:', days.clientHeight);
                 
                 days.scrollTop = scrollPosition;
                 gutter.scrollTop = scrollPosition;
                 
                 // Verify scroll position was set
                 setTimeout(() => {
-                    console.log('[Scroll] Final scroll position:', days.scrollTop);
                 }, 50);
             }
         }, 200); // Increased delay to ensure DOM is fully ready
@@ -219,7 +229,7 @@ export default class PublicCalendarView extends LightningElement {
         }
         
         // ========== CACHE CLEANUP - START ==========
-        // 组件卸载时清理缓存，释放内存
+        // Clean up cache when component unmounts to free memory
         this.clearCache();
         // ========== CACHE CLEANUP - END ==========
     }
@@ -252,45 +262,32 @@ export default class PublicCalendarView extends LightningElement {
 
     // ========== CACHE OPTIMIZATION METHODS - START ==========
     
-    // 检查缓存是否有效
+    // Check if cache is valid
     isCacheValid() {
-        const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+        const CACHE_DURATION = 5 * 60 * 1000; // 5-minute cache
         return this.cacheTimestamp && 
                this.cacheCalendarId === this.selectedCalendarId &&
                (Date.now() - this.cacheTimestamp) < CACHE_DURATION &&
                this.cachedEvents.length > 0;
     }
     
-    // 更新缓存
+    // Update cache
     updateCache(events) {
         this.cachedEvents = [...events];
         this.cacheTimestamp = Date.now();
         this.cacheCalendarId = this.selectedCalendarId;
-        console.log('[Cache] Updated cache:', {
-            eventsCount: this.cachedEvents.length,
-            calendarId: this.cacheCalendarId,
-            timestamp: new Date(this.cacheTimestamp).toLocaleString()
-        });
     }
     
-    // 清除缓存
+    // Clear cache
     clearCache() {
         this.cachedEvents = [];
         this.cacheTimestamp = null;
         this.cacheCalendarId = null;
-        console.log('[Cache] Cache cleared');
     }
     
-    // 记录缓存统计信息
+    // Log cache statistics
     logCacheStats() {
         const cacheAge = this.cacheTimestamp ? (Date.now() - this.cacheTimestamp) / 1000 : 0;
-        console.log('[Cache Stats]', {
-            cachedEvents: this.cachedEvents.length,
-            cacheAge: Math.round(cacheAge) + 's',
-            cacheValid: this.isCacheValid(),
-            calendarId: this.cacheCalendarId,
-            selectedCalendarId: this.selectedCalendarId
-        });
     }
     
     // ========== CACHE OPTIMIZATION METHODS - END ==========
@@ -326,32 +323,25 @@ export default class PublicCalendarView extends LightningElement {
             // ========== CACHE CHECK - START ==========
             this.logCacheStats();
             
-            // 检查缓存是否有效
+            // Check if cache is valid
             if (this.isCacheValid()) {
-                console.log('[Cache] Using cached data instead of API call');
                 this.events = [...this.cachedEvents];
                 this.refreshView();
                 this.loading = false;
                 return;
             }
             
-            // 避免并发请求
+            // Avoid concurrent requests
             if (this.isCurrentlyFetching) {
-                console.log('[Fetch] Request already in progress, skipping duplicate call');
                 return;
             }
             
             this.isCurrentlyFetching = true;
-            console.log('[Cache] Cache miss - making API call');
             // ========== CACHE CHECK - END ==========
             
             this.loading = true;
             this.error = false;
 
-            console.log(`${LOG_TAG} ${LOG_VERSION} === FETCH EVENTS DEBUG START ===`);
-            console.log(`${LOG_TAG} ${LOG_VERSION} - fetchEvents invoked`);
-            console.log('[Fetch] Using selectedCalendarId:', this.selectedCalendarId);
-            console.log('[Fetch] Current week start:', this.currentWeekStart ? this.currentWeekStart.toDateString() : 'Not set');
             const data = await getPublicCalendarEvents({ calendarId: this.selectedCalendarId });
             const raw = Array.isArray(data) ? data : [];
             
@@ -483,27 +473,58 @@ export default class PublicCalendarView extends LightningElement {
             //     _end_date: e._end ? e._end.toDateString() : 'NO_END'
             // })));
 
-            console.log('=== FETCH EVENTS DEBUG END ===');
-            console.log('[Fetch] Total processed events:', this.events.length);
             
             // ========== EVENT SORTING OPTIMIZATION - START ==========
-            console.log('[Sort] Sorting events by date for better performance...');
             const startSortTime = performance.now();
             
-            // 按开始时间排序，没有开始时间的事件排到最后
+            // Deduplication: remove duplicate events with same time and title
+            console.log('=== DEDUPLICATION ===');
+            console.log(`Before deduplication: ${this.events.length} events`);
+            
+            const uniqueEvents = [];
+            const seenEvents = new Set();
+            
+            this.events.forEach(event => {
+                // Create unique identifier: title + start time + end time
+                const uniqueKey = `${event.title}-${event._start ? event._start.getTime() : 'no-start'}-${event._end ? event._end.getTime() : 'no-end'}`;
+                
+                if (!seenEvents.has(uniqueKey)) {
+                    seenEvents.add(uniqueKey);
+                    uniqueEvents.push(event);
+                } else {
+                    console.log(`DUPLICATE REMOVED: "${event.title}" at ${event._start ? event._start.toTimeString() : 'NO_TIME'}`);
+                }
+            });
+            
+            this.events = uniqueEvents;
+            console.log(`After deduplication: ${this.events.length} events`);
+            console.log('=== END DEDUPLICATION ===');
+            
+            // Sort by start time, events without start time go to the end
+            console.log('=== SORTING ALL EVENTS ===');
+            console.log(`Before sorting: ${this.events.length} events`);
+            
             this.events.sort((a, b) => {
                 if (!a._start && !b._start) return 0;
-                if (!a._start) return 1;  // 没有开始时间的排到后面
+                if (!a._start) return 1;  // Events without start time go to the back
                 if (!b._start) return -1;
                 return a._start.getTime() - b._start.getTime();
             });
             
-            const sortTime = Math.round(performance.now() - startSortTime);
-            console.log(`[Sort] Sorted ${this.events.length} events in ${sortTime}ms`);
+            console.log('SORTED EVENTS LIST:');
+            this.events.forEach((event, index) => {
+                console.log(`${index}: "${event.title}"`);
+                console.log(`   Start: ${event._start ? event._start.toDateString() + ' ' + event._start.toTimeString() : 'NO_START'}`);
+                console.log(`   End: ${event._end ? event._end.toTimeString() : 'NO_END'}`);
+                console.log(`   Key: ${event._key || event.id || event.Id}`);
+                console.log(`   IsRecurring: ${event.isRecurring}`);
+                console.log('---');
+            });
+            console.log('=== END SORTING ===');
             
-            // 更新事件日期范围信息（现在数组已排序）
-            console.log('[Fetch] Events date range:', this.events.length > 0 ? 
-                `${this.events[0]._start?.toDateString()} to ${this.events[this.events.length-1]._start?.toDateString()}` : 'No events');
+            const sortTime = Math.round(performance.now() - startSortTime);
+            
+            // Update event date range info (array is now sorted)
             // ========== EVENT SORTING OPTIMIZATION - END ==========
             
             // Auto-jump to the first event's week if current week has no events
@@ -546,23 +567,15 @@ export default class PublicCalendarView extends LightningElement {
                 const currentWeekEvents = this.events.filter(e => 
                     e._start && e._start >= weekStart && e._start <= weekEnd
                 );
-                console.log(`[Fetch] Current week (${weekStart.toDateString()} - ${weekEnd.toDateString()}) has ${currentWeekEvents.length} events`);
-                if (currentWeekEvents.length > 0) {
-                    console.log('[Fetch] Current week events:', currentWeekEvents.map(e => ({
-                        title: e.title,
-                        start: e._start.toDateString()
-                    })));
-                }
             }
             
             // ========== CACHE UPDATE - START ==========
-            // 更新缓存（仅在成功获取和处理数据后）
+            // Update cache (only after successful data fetch and processing)
             this.updateCache(this.events);
             // ========== CACHE UPDATE - END ==========
             
             this.loading = false;
         } catch (error) {
-            console.error('[Fetch] ERROR:', error);
             this.handleError(error);
         } finally {
             // ========== STATE CLEANUP - START ==========
@@ -724,7 +737,7 @@ export default class PublicCalendarView extends LightningElement {
             // });
             
             // ========== RECURRING EVENT TIME FIX - START ==========
-            // 保存原始时间组件，避免夏时制和精度问题
+            // Preserve original time components to avoid DST and precision issues
             const originalHours = event._start.getHours();
             const originalMinutes = event._start.getMinutes();
             const originalSeconds = event._start.getSeconds();
@@ -733,13 +746,6 @@ export default class PublicCalendarView extends LightningElement {
             let currentDate = new Date(event._start);
             const duration = event._end ? (event._end.getTime() - event._start.getTime()) : (30 * 60 * 1000); // 30 min default
             
-            console.log('[ExpandRecurring] FIXED Duration calculation:', {
-                startTime: event._start.toString(),
-                endTime: event._end ? event._end.toString() : 'NO_END',
-                originalTime: `${originalHours}:${originalMinutes}:${originalSeconds}`,
-                durationMs: duration,
-                durationMinutes: duration / (60 * 1000)
-            });
             // ========== RECURRING EVENT TIME FIX - END ==========
             
             for (let i = 0; i < Math.min(count, maxInstances); i++) {
@@ -747,16 +753,10 @@ export default class PublicCalendarView extends LightningElement {
                 const sixMonthsAgo = new Date(today.getTime() - (180 * 24 * 60 * 60 * 1000));
                 const inDateRange = currentDate >= sixMonthsAgo && currentDate <= sixMonthsFromNow;
                 
-                console.log(`[ExpandRecurring] FIXED Instance ${i + 1}:`, {
-                    date: currentDate.toDateString(),
-                    time: currentDate.toTimeString().substring(0, 8),
-                    originalTime: `${originalHours}:${originalMinutes}`,
-                    inDateRange: inDateRange
-                });
                 
                 if (inDateRange) {
                     // ========== TIME PRECISION FIX - START ==========
-                    // 创建精确的时间实例，保持原始时间组件
+                    // Create precise time instance, preserving original time components
                     const instanceStart = new Date(currentDate.getFullYear(), 
                                                   currentDate.getMonth(), 
                                                   currentDate.getDate(),
@@ -780,31 +780,17 @@ export default class PublicCalendarView extends LightningElement {
                     };
                     
                     instances.push(instance);
-                    console.log(`[ExpandRecurring] ✅ FIXED Generated instance ${instances.length}:`, {
-                        title: instance.title,
-                        key: instance._key,
-                        start: instance._start.toDateString() + ' ' + instance._start.toTimeString().substring(0, 8),
-                        end: instance._end.toDateString() + ' ' + instance._end.toTimeString().substring(0, 8),
-                        hourCheck: `Should be ${originalHours}:${originalMinutes}, actual: ${instance._start.getHours()}:${instance._start.getMinutes()}`
-                    });
                 } else {
-                    console.log(`[ExpandRecurring] ⏭️ Skipped instance ${i + 1} (outside date range)`);
                 }
                 
                 // ========== DATE ADVANCEMENT FIX - START ==========
-                // 更安全的日期推进，避免月末边界问题
+                // Safer date advancement to avoid month-end boundary issues
                 const nextDate = new Date(currentDate);
                 nextDate.setDate(currentDate.getDate() + interval);
                 
-                // 验证日期推进是否正确
+                // Verify date advancement is correct
                 const expectedDay = currentDate.getDate() + interval;
                 if (nextDate.getDate() !== expectedDay && nextDate.getDate() !== (expectedDay % 31)) {
-                    console.warn('[ExpandRecurring] Date boundary issue detected:', {
-                        current: currentDate.toDateString(),
-                        expected: expectedDay,
-                        actual: nextDate.getDate(),
-                        month: nextDate.getMonth()
-                    });
                 }
                 
                 currentDate = nextDate;
@@ -854,51 +840,30 @@ export default class PublicCalendarView extends LightningElement {
 
     // ---------- filtering & positioning ----------
     getEventsForDate(date) {
-        // Only debug for Thu 11
-        const isDebugDate = date.getDate() === 11 && date.getMonth() === 8 && date.getFullYear() === 2025;
-        if (isDebugDate) {
-            console.log('=== GET EVENTS FOR DATE DEBUG (Thu 11) ===');
-            console.log('[GetEvents] 🔍 Looking for events on:', date.toDateString());
-            console.log('[GetEvents] Total events in array:', this.events.length);
-        }
+        // console.log(`=== GET EVENTS FOR DATE: ${date.toDateString()} ===`);
+        // console.log(`Total events in this.events: ${this.events.length}`);
         
         const list = this.events.filter(evt => {
             const hasStart = evt._start;
             
             if (!hasStart) {
-                if (isDebugDate) console.log('[GetEvents] ❌ Event has no start date:', evt.title);
+                // console.log(`❌ Event "${evt.title}" has no start time`);
                 return false;
             }
             
             const matches = this.sameLocalDate(evt._start, date);
-            
-            if (isDebugDate) {
-                console.log('[GetEvents] Checking event:', {
-                    title: evt.title,
-                    key: evt._key || evt.id || evt.Id,
-                    isRecurring: evt.isRecurring,
-                    eventDate: evt._start.toDateString(),
-                    eventTime: evt._start.toTimeString().substring(0, 8),
-                    targetDate: date.toDateString(),
-                    matches: matches ? '✅' : '❌'
-                });
-            }
-            
+            // if (matches) {
+            //     console.log(`✅ Event "${evt.title}" matches date ${date.toDateString()}`);
+            //     console.log(`   Start: ${evt._start.toDateString()} ${evt._start.toTimeString()}`);
+            //     console.log(`   End: ${evt._end ? evt._end.toTimeString() : 'NO_END'}`);
+            //     console.log(`   Key: ${evt._key || evt.id || evt.Id}`);
+            //     console.log(`   IsRecurring: ${evt.isRecurring}`);
+            // }
             return matches;
         });
         
-        if (isDebugDate) {
-            console.log(`[GetEvents] 🎯 RESULT: Found ${list.length} events for ${date.toDateString()}`);
-            if (list.length > 0) {
-                console.log('[GetEvents] Found events:', list.map(e => ({
-                    title: e.title,
-                    key: e._key || e.id || e.Id,
-                    start: e._start.toTimeString().substring(0, 8),
-                    isRecurring: e.isRecurring
-                })));
-            }
-            console.log('=== GET EVENTS FOR DATE COMPLETE ===');
-        }
+        // console.log(`Found ${list.length} events for ${date.toDateString()}`);
+        // console.log(`=== END GET EVENTS FOR DATE ===`);
         
         return list;
     }
@@ -913,13 +878,8 @@ export default class PublicCalendarView extends LightningElement {
     }
 
     buildWeekView() {
-        console.log('=== BUILD WEEK VIEW START ===');
-        console.log('[BuildWeek] Current weekDays length before:', this.weekDays.length);
         this.weekDays = [];
         const today = new Date(); today.setHours(0, 0, 0, 0);
-
-        console.log('[BuildWeek] Starting with currentWeekStart:', this.currentWeekStart.toDateString());
-        console.log('[BuildWeek] All events available:', this.events.length);
 
         // Build 7 days starting from Sunday of currentWeekStart
         for (let i = 0; i < 7; i++) {
@@ -928,9 +888,18 @@ export default class PublicCalendarView extends LightningElement {
 
             const dayEventsRaw = this.getEventsForDate(currentDate);
             
-            // Only log for non-Thu-11 days if needed for debugging
-            // console.log(`[BuildWeek] Day ${i}: ${currentDate.toDateString()}`);
-            // console.log(`[BuildWeek] Events for ${currentDate.toDateString()}:`, dayEventsRaw.length);
+            // DEBUG: Show what we got for this specific day
+            // if (currentDate.getDate() === 11 && currentDate.getMonth() === 8 && currentDate.getFullYear() === 2025) {
+            //     console.log(`🔥 THU 11 RAW EVENTS: ${dayEventsRaw.length} events`);
+            //     dayEventsRaw.forEach((event, idx) => {
+            //         console.log(`RAW ${idx}: "${event.title}"`);
+            //         console.log(`   Start: ${event._start ? event._start.toDateString() + ' ' + event._start.toTimeString() : 'NO_START'}`);
+            //         console.log(`   End: ${event._end ? event._end.toTimeString() : 'NO_END'}`);
+            //         console.log(`   Key: ${event._key || event.id || event.Id}`);
+            //         console.log(`   IsRecurring: ${event.isRecurring}`);
+            //         console.log('---');
+            //     });
+            // }
 
             // SPECIAL DEBUG for Thu 11 (September 11, 2025)
             if (currentDate.getDate() === 11 && currentDate.getMonth() === 8 && currentDate.getFullYear() === 2025) {
@@ -965,7 +934,13 @@ export default class PublicCalendarView extends LightningElement {
             const rawEvents = [];
             dayEventsRaw.forEach((e, idx) => {
                 const eventKey = `${e.title}-${e._start ? e._start.getTime() : 'no-time'}`;
-                if (seenEvents.has(eventKey)) return; // Skip duplicates
+                if (seenEvents.has(eventKey)) {
+                    // DEBUG: Thu 11 duplicate detection
+                    if (currentDate.getDate() === 11 && currentDate.getMonth() === 8 && currentDate.getFullYear() === 2025) {
+                        console.log(`DUPLICATE DETECTED: "${e.title}" with key: ${eventKey}`);
+                    }
+                    return; // Skip duplicates
+                }
                 seenEvents.add(eventKey);
                 
                 const k = this.makeEventKey(e, `${currentDate.getTime()}-${idx}`);
@@ -992,22 +967,10 @@ export default class PublicCalendarView extends LightningElement {
                         }
                     }
                     
-                    // 验证24小时网格中的特殊时间点
+                    // Validate special time points in 24-hour grid
                     const isEarlyMorningEvent = startHour >= 0 && startHour <= 4;
                     const isRecurringEvent = e.isRecurring || false;
                     
-                    if (isEarlyMorningEvent || isRecurringEvent) {
-                        console.log('[GridPosition] 24-hour grid positioning:', {
-                            eventTitle: e.title,
-                            startHour: startHour,
-                            startMinutes: startMinutes,
-                            isRecurring: isRecurringEvent,
-                            isEarlyMorning: isEarlyMorningEvent,
-                            matchedH: matchedH,
-                            slotIndex: slotIndex,
-                            expectedPosition: slotIndex > 0 ? `${(slotIndex - 1) * 50 + (startMinutes / 60) * 50}px` : 'INVALID'
-                        });
-                    }
                     // ========== 24-HOUR GRID POSITION FIX - END ==========
                     
                     if (slotIndex > 0) {
@@ -1021,23 +984,8 @@ export default class PublicCalendarView extends LightningElement {
                         }
                         
                         // ========== POSITION VALIDATION - START ==========
-                        if (isEarlyMorningEvent || isRecurringEvent) {
-                            console.log('[GridPosition] Final calculated position:', {
-                                eventTitle: e.title,
-                                topPosition: topPosition + 'px',
-                                height: height + 'px',
-                                slotIndex: slotIndex,
-                                verification: `Hour ${startHour} should be in slot ${slotIndex} at ${topPosition}px`
-                            });
-                        }
                         // ========== POSITION VALIDATION - END ==========
                     } else {
-                        console.warn('[GridPosition] ⚠️ Failed to find valid slot for event:', {
-                            title: e.title,
-                            startHour: startHour,
-                            startTime: e._start.toString(),
-                            isRecurring: isRecurringEvent
-                        });
                     }
                 }
                 
@@ -1057,18 +1005,31 @@ export default class PublicCalendarView extends LightningElement {
 
             // SPECIAL DEBUG for Thu 11
             if (currentDate.getDate() === 11 && currentDate.getMonth() === 8 && currentDate.getFullYear() === 2025 && allEvents.length > 0) {
-                console.log('🔥🔥🔥 SPECIAL DEBUG FOR THU 11 - ALL EVENTS 🔥🔥🔥');
-                console.log('[Thu11] All events for this day:', allEvents.map(e => ({
-                    title: e.title,
-                    _key: e._key,
-                    startTime: e._start ? e._start.toTimeString().substring(0, 8) : 'NO_TIME',
-                    endTime: e._end ? e._end.toTimeString().substring(0, 8) : 'NO_END',
-                    topPosition: e._topPosition + 'px',
-                    height: e._height + 'px',
-                    eventIndex: e._eventIndex,
-                    totalInGroup: e._totalInGroup,
-                    colorIndex: e._colorIndex
-                })));
+                console.log('=== THU 11 DEBUG START ===');
+                
+                allEvents.forEach((e, index) => {
+                    console.log(`EVENT ${index}: "${e.title}"`);
+                    console.log(`  Time: ${e._start ? e._start.toTimeString().substring(0, 8) : 'NO_TIME'} - ${e._end ? e._end.toTimeString().substring(0, 8) : 'NO_END'}`);
+                    console.log(`  Position: top=${e._topPosition}px, height=${e._height}px`);
+                    console.log(`  Layout: eventIndex=${e._eventIndex}, totalInGroup=${e._totalInGroup}, colorIndex=${e._colorIndex}`);
+                    console.log(`  Column: _columnIndex=${e._columnIndex}, _totalActiveColumns=${e._totalActiveColumns}`);
+                    console.log(`  Key: ${e._key}`);
+                    console.log('---');
+                });
+                
+                // Focus analysis on the last two overlapping events
+                const event3 = allEvents[3];
+                const event4 = allEvents[4];
+                if (event3 && event4) {
+                    console.log('OVERLAP ANALYSIS:');
+                    console.log(`Event3 "${event3.title}": ${new Date(event3._startTime).toTimeString()} - ${new Date(event3._endTime).toTimeString()}`);
+                    console.log(`  eventIndex=${event3._eventIndex}, columnIndex=${event3._columnIndex}, totalInGroup=${event3._totalInGroup}`);
+                    console.log(`Event4 "${event4.title}": ${new Date(event4._startTime).toTimeString()} - ${new Date(event4._endTime).toTimeString()}`);
+                    console.log(`  eventIndex=${event4._eventIndex}, columnIndex=${event4._columnIndex}, totalInGroup=${event4._totalInGroup}`);
+                    console.log(`Actually overlap? ${event3._startTime < event4._endTime && event4._startTime < event3._endTime}`);
+                }
+                
+                console.log('=== THU 11 DEBUG END ===');
             }
 
             this.weekDays.push({
@@ -1088,55 +1049,44 @@ export default class PublicCalendarView extends LightningElement {
             });
         }
 
-        console.log('[BuildWeek] Final weekDays length:', this.weekDays.length);
-        console.log('[BuildWeek] Final weekDays summary:', this.weekDays.map(d => ({
-            dateStr: d.dateStr,
-            totalEvents: d.totalEvents,
-            allEventsCount: d.allEvents ? d.allEvents.length : 0
-        })));
-        
-        // Force LWC to detect the change by creating a new array reference
-        this.weekDays = [...this.weekDays];
-        console.log('[BuildWeek] Forced weekDays array update');
-        console.log('=== BUILD WEEK VIEW COMPLETE ===');
+        // Trigger reactive update properly
+        this.weekDays = this.weekDays.slice();
     }
 
     calculateConcurrentEventLayout(events) {
-        console.log('[ConcurrentLayout] Processing', events.length, 'events for improved column-based layout');
-        
         if (events.length === 0) return [];
         
-        // 限制最多4个并发事件
+        // Limit to maximum 4 concurrent events
         const MAX_COLUMNS = 4;
         
-        // 按开始时间排序，如果开始时间相同，按结束时间排序
+        // Sort by start time, if start time is same, sort by end time
         const sortedEvents = [...events].sort((a, b) => {
             if (a._startTime === b._startTime) {
-                return a._endTime - b._endTime; // 开始时间相同时，短事件优先
+                return a._endTime - b._endTime; // When start time is same, shorter events first
             }
             return a._startTime - b._startTime;
         });
         
-        console.log('[ConcurrentLayout] Step 1: Creating overlap groups');
+        // console.log('[ConcurrentLayout] Step 1: Creating overlap groups');
         
-        // 第一步：创建重叠事件组
+        // Step 1: Create overlap event groups
         const overlapGroups = this.createOverlapGroups(sortedEvents);
         
-        console.log('[ConcurrentLayout] Found', overlapGroups.length, 'overlap groups');
+        // console.log('[ConcurrentLayout] Found', overlapGroups.length, 'overlap groups');
         
-        // 第二步：为每个组内的事件分配列
+        // Step 2: Assign columns to events within each group
         const eventColumnMap = new Map();
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
         
         overlapGroups.forEach((group, groupIndex) => {
-            console.log(`[ConcurrentLayout] Processing group ${groupIndex + 1} with ${group.length} events`);
+            // console.log(`[ConcurrentLayout] Processing group ${groupIndex + 1} with ${group.length} events`);
             
             if (group.length === 1) {
-                // 单个事件，分配到列0
+                // Single event, assign to column 0
                 eventColumnMap.set(group[0]._key || group[0].title, 0);
-                console.log(`[ConcurrentLayout] Single event "${group[0].title}" → Column 0`);
+                // console.log(`[ConcurrentLayout] Single event "${group[0].title}" → Column 0`);
             } else {
-                // 多个重叠事件，使用区间图着色算法
+                // Multiple overlapping events, use interval graph coloring algorithm
                 const columnAssignments = this.assignColumnsToOverlapGroup(group, MAX_COLUMNS);
                 columnAssignments.forEach((columnIndex, eventKey) => {
                     eventColumnMap.set(eventKey, columnIndex);
@@ -1144,12 +1094,12 @@ export default class PublicCalendarView extends LightningElement {
             }
         });
         
-        console.log('[ConcurrentLayout] Step 2: Calculating dynamic widths');
+        // console.log('[ConcurrentLayout] Step 2: Calculating dynamic widths');
         
-        // 第三步：为每个事件计算动态宽度和排序信息
+        // Step 3: Calculate dynamic width and sorting info for each event
         const processedEvents = [];
         
-        // 创建开始时间排序映射（用于z-index计算）
+        // Create start time ranking map (for z-index calculation)
         const startTimeRankMap = new Map();
         const uniqueStartTimes = [...new Set(sortedEvents.map(e => e._startTime))].sort((a, b) => a - b);
         uniqueStartTimes.forEach((startTime, index) => {
@@ -1159,29 +1109,29 @@ export default class PublicCalendarView extends LightningElement {
         sortedEvents.forEach(event => {
             const eventColumn = eventColumnMap.get(event._key || event.title);
             
-            // 计算在此事件时间段内有多少列是活跃的
+            // Calculate how many columns are active during this event's time period
             const activeColumns = this.calculateActiveColumns(event, sortedEvents, eventColumnMap);
             const maxActiveColumns = Math.min(activeColumns, MAX_COLUMNS);
             
-            console.log(`[ConcurrentLayout] "${event.title}" in column ${eventColumn}, active columns: ${maxActiveColumns}`);
+            // console.log(`[ConcurrentLayout] "${event.title}" in column ${eventColumn}, active columns: ${maxActiveColumns}`);
             
-            processedEvents.push({
-                ...event,
+                processedEvents.push({
+                    ...event,
                 _columnIndex: eventColumn,
                 _totalActiveColumns: maxActiveColumns,
                 _colorIndex: eventColumn % colors.length,
-                _eventIndex: eventColumn, // 兼容现有代码
-                _totalInGroup: maxActiveColumns, // 兼容现有代码  
-                _gapPx: 2, // 列间间距
-                _startTimeRank: startTimeRankMap.get(event._startTime) || 0 // 新增：开始时间排序
+                _eventIndex: eventColumn, // Compatible with existing code
+                _totalInGroup: maxActiveColumns, // Compatible with existing code
+                _gapPx: 2, // Column spacing
+                _startTimeRank: startTimeRankMap.get(event._startTime) || 0 // New: start time ranking
             });
         });
         
-        console.log('[ConcurrentLayout] Layout complete');
+        // console.log('[ConcurrentLayout] Layout complete');
         return processedEvents;
     }
     
-    // 创建重叠事件组
+    // Create overlap event groups
     createOverlapGroups(sortedEvents) {
         const groups = [];
         const processed = new Set();
@@ -1189,11 +1139,11 @@ export default class PublicCalendarView extends LightningElement {
         sortedEvents.forEach(event => {
             if (processed.has(event._key || event.title)) return;
             
-            // 创建新组，包含与当前事件重叠的所有事件
+            // Create new group containing all events that overlap with current event
             const group = [event];
             processed.add(event._key || event.title);
             
-            // 查找所有与当前事件重叠的事件
+            // Find all events that overlap with current event
             sortedEvents.forEach(otherEvent => {
                 if (processed.has(otherEvent._key || otherEvent.title)) return;
                 
@@ -1203,14 +1153,14 @@ export default class PublicCalendarView extends LightningElement {
                 }
             });
             
-            // 继续扩展组：查找与组内任何事件重叠的事件
+            // Continue expanding group: find events that overlap with any event in the group
             let foundNew = true;
             while (foundNew) {
                 foundNew = false;
                 sortedEvents.forEach(candidateEvent => {
                     if (processed.has(candidateEvent._key || candidateEvent.title)) return;
                     
-                    // 检查候选事件是否与组内任何事件重叠
+                    // Check if candidate event overlaps with any event in the group
                     const overlapsWithGroup = group.some(groupEvent => 
                         this.eventsOverlap(candidateEvent, groupEvent)
                     );
@@ -1229,64 +1179,64 @@ export default class PublicCalendarView extends LightningElement {
         return groups;
     }
     
-    // 为重叠事件组分配列（按事件长度排序优化）
+    // Assign columns to overlap group (optimized by event duration sorting)
     assignColumnsToOverlapGroup(group, maxColumns) {
         const columnAssignments = new Map();
         
-        // 恢复：按事件长度排序（最长的放左边），同时修复结束时间占位问题
+        // Restore: sort by event duration (longest on left), also fix end time occupation issue
         const sortedGroup = [...group].sort((a, b) => {
             const durationA = a._endTime - a._startTime;
             const durationB = b._endTime - b._startTime;
             
-            // 长事件优先（放左边），短事件后面（放右边）
+            // Long events first (on left), short events later (on right)
             if (durationA !== durationB) {
-                return durationB - durationA; // 降序：长 → 短
+                return durationB - durationA; // Descending: long → short
             }
             
-            // 如果长度相同，按开始时间排序（早开始的在左边）
+            // If duration is same, sort by start time (earlier start on left)
             return a._startTime - b._startTime;
         });
         
-        console.log('[ConcurrentLayout] Assigning columns for overlap group (sorted by duration - longest first):', 
-            sortedGroup.map(e => {
-                const duration = e._endTime - e._startTime;
-                const durationMinutes = Math.round(duration / (1000 * 60));
-                return `"${e.title}" (${new Date(e._startTime).toLocaleTimeString()} - ${new Date(e._endTime).toLocaleTimeString()}, ${durationMinutes}min)`;
-            }));
+        // console.log('[ConcurrentLayout] Assigning columns for overlap group (sorted by duration - longest first):', 
+        //     sortedGroup.map(e => {
+        //         const duration = e._endTime - e._startTime;
+        //         const durationMinutes = Math.round(duration / (1000 * 60));
+        //         return `"${e.title}" (${new Date(e._startTime).toLocaleTimeString()} - ${new Date(e._endTime).toLocaleTimeString()}, ${durationMinutes}min)`;
+        //     }));
         
-        // 跟踪每列的结束时间
+        // Track end time for each column
         const columnEndTimes = [];
         
         sortedGroup.forEach((event, index) => {
             let assignedColumn = -1;
             
-            // 按长度排序策略：最长事件优先分配到最左边的可用列
-            // 这样确保长事件在左边，短事件在右边的视觉效果
+            // Duration sorting strategy: longest events first assigned to leftmost available column
+            // This ensures long events on left, short events on right visually
             
-            // 寻找第一个可用的列（智能处理：考虑事件真实重叠情况）
+            // Find first available column (smart handling: consider actual event overlap)
             for (let col = 0; col < Math.min(columnEndTimes.length, maxColumns); col++) {
-                // 检查当前事件是否与该列中已有的事件真正重叠
+                // Check if current event actually overlaps with events already in this column
                 const canUseColumn = event._startTime >= columnEndTimes[col];
                 
                 if (canUseColumn) {
                     assignedColumn = col;
-                    console.log(`[ConcurrentLayout] "${event.title}" can use column ${col} (previous event ended at ${new Date(columnEndTimes[col]).toLocaleTimeString()})`);
+                    // console.log(`[ConcurrentLayout] "${event.title}" can use column ${col} (previous event ended at ${new Date(columnEndTimes[col]).toLocaleTimeString()})`);
                     break;
-                } else {
-                    // 详细记录为什么不能使用这个列
-                    console.log(`[ConcurrentLayout] "${event.title}" cannot use column ${col}: starts at ${new Date(event._startTime).toLocaleTimeString()}, but column busy until ${new Date(columnEndTimes[col]).toLocaleTimeString()}`);
+            } else {
+                    // Detailed logging of why this column cannot be used
+                    // console.log(`[ConcurrentLayout] "${event.title}" cannot use column ${col}: starts at ${new Date(event._startTime).toLocaleTimeString()}, but column busy until ${new Date(columnEndTimes[col]).toLocaleTimeString()}`);
                 }
             }
             
-            // 如果没找到可用列且未达到限制，创建新列
+            // If no available column found and limit not reached, create new column
             if (assignedColumn === -1 && columnEndTimes.length < maxColumns) {
                 assignedColumn = columnEndTimes.length;
                 columnEndTimes.push(0);
             }
             
-            // 如果仍未找到列（达到限制），采用优化策略
+            // If still no column found (limit reached), use optimization strategy
             if (assignedColumn === -1) {
-                // 对于按长度排序的事件，优先分配到最早结束的列
+                // For duration-sorted events, prioritize assignment to earliest ending column
                 let earliestEndTime = columnEndTimes[0];
                 assignedColumn = 0;
                 for (let col = 1; col < columnEndTimes.length; col++) {
@@ -1295,25 +1245,25 @@ export default class PublicCalendarView extends LightningElement {
                         assignedColumn = col;
                     }
                 }
-                console.warn(`[ConcurrentLayout] Event "${event.title}" (duration: ${Math.round((event._endTime - event._startTime) / (1000 * 60))}min) forced into column ${assignedColumn} due to ${maxColumns}-column limit`);
+                // console.warn(`[ConcurrentLayout] Event "${event.title}" (duration: ${Math.round((event._endTime - event._startTime) / (1000 * 60))}min) forced into column ${assignedColumn} due to ${maxColumns}-column limit`);
             }
             
-            // 更新列的结束时间和分配映射
+            // Update column end time and assignment mapping
             columnEndTimes[assignedColumn] = event._endTime;
             columnAssignments.set(event._key || event.title, assignedColumn);
             
             const duration = Math.round((event._endTime - event._startTime) / (1000 * 60));
-            console.log(`[ConcurrentLayout] "${event.title}" (${duration}min) → Column ${assignedColumn}`);
+            // console.log(`[ConcurrentLayout] "${event.title}" (${duration}min) → Column ${assignedColumn}`);
         });
         
         return columnAssignments;
     }
     
-    // 计算在给定事件时间段内有多少列是活跃的（优化版本）
+    // Calculate how many columns are active during given event time period (optimized version)
     calculateActiveColumns(targetEvent, allEvents, eventColumnMap) {
         const activeColumnIndices = new Set();
         
-        // 找到所有与目标事件重叠的事件，并收集它们的列索引
+        // Find all events that overlap with target event and collect their column indices
         allEvents.forEach(event => {
             if (this.eventsOverlap(targetEvent, event)) {
                 const columnIndex = eventColumnMap.get(event._key || event.title);
@@ -1323,27 +1273,27 @@ export default class PublicCalendarView extends LightningElement {
             }
         });
         
-        // 优化：对于部分重叠的事件，计算最大并发数
+        // Optimization: for partially overlapping events, calculate maximum concurrency
         const maxConcurrentAtAnyTime = this.calculateMaxConcurrentAtAnyTime(targetEvent, allEvents, eventColumnMap);
         
-        console.log(`[ActiveColumns] "${targetEvent.title}": overlap-based=${activeColumnIndices.size}, max-concurrent=${maxConcurrentAtAnyTime}`);
+        // console.log(`[ActiveColumns] "${targetEvent.title}": overlap-based=${activeColumnIndices.size}, max-concurrent=${maxConcurrentAtAnyTime}`);
         
-        // 返回更精确的活跃列数量
+        // Return more accurate active column count
         return Math.max(activeColumnIndices.size, maxConcurrentAtAnyTime);
     }
     
-    // 计算在事件的任何时间点的最大并发数
+    // Calculate maximum concurrency at any time point during the event
     calculateMaxConcurrentAtAnyTime(targetEvent, allEvents, eventColumnMap) {
-        let maxConcurrent = 1; // 至少包含自己
+        let maxConcurrent = 1; // At least include itself
         
-        // 创建时间点事件：开始和结束
+        // Create time point events: start and end
         const timeEvents = [];
         
-        // 添加目标事件
+        // Add target event
         timeEvents.push({ time: targetEvent._startTime, type: 'start', event: targetEvent });
         timeEvents.push({ time: targetEvent._endTime, type: 'end', event: targetEvent });
         
-        // 添加所有重叠的事件
+        // Add all overlapping events
         allEvents.forEach(event => {
             if (event !== targetEvent && this.eventsOverlap(targetEvent, event)) {
                 timeEvents.push({ time: event._startTime, type: 'start', event: event });
@@ -1351,7 +1301,7 @@ export default class PublicCalendarView extends LightningElement {
             }
         });
         
-        // 按时间排序，结束事件在开始事件之前（相同时间）
+        // Sort by time, end events before start events (same time)
         timeEvents.sort((a, b) => {
             if (a.time === b.time) {
                 return a.type === 'end' ? -1 : 1;
@@ -1361,7 +1311,7 @@ export default class PublicCalendarView extends LightningElement {
         
         let currentConcurrent = 0;
         
-        // 扫描线算法计算最大并发数
+        // Scanline algorithm to calculate maximum concurrency
         timeEvents.forEach(timeEvent => {
             if (timeEvent.type === 'start') {
                 currentConcurrent++;
@@ -1377,14 +1327,14 @@ export default class PublicCalendarView extends LightningElement {
     eventsOverlap(event1, event2) {
         // Two events overlap if one starts before the other ends
         const overlap = event1._startTime < event2._endTime && event2._startTime < event1._endTime;
-        if (overlap) {
-            console.log('[Overlap] Events overlap:', {
-                event1: event1.title,
-                event1Time: `${new Date(event1._startTime).toTimeString().substring(0,8)} - ${new Date(event1._endTime).toTimeString().substring(0,8)}`,
-                event2: event2.title,
-                event2Time: `${new Date(event2._startTime).toTimeString().substring(0,8)} - ${new Date(event2._endTime).toTimeString().substring(0,8)}`
-            });
-        }
+        // if (overlap) {
+        //     console.log('[Overlap] Events overlap:', {
+        //         event1: event1.title,
+        //         event1Time: `${new Date(event1._startTime).toTimeString().substring(0,8)} - ${new Date(event1._endTime).toTimeString().substring(0,8)}`,
+        //         event2: event2.title,
+        //         event2Time: `${new Date(event2._startTime).toTimeString().substring(0,8)} - ${new Date(event2._endTime).toTimeString().substring(0,8)}`
+        //     });
+        // }
         return overlap;
     }
 
@@ -1488,7 +1438,7 @@ export default class PublicCalendarView extends LightningElement {
         this.calendarId = this.selectedCalendarId;
         
         // ========== CACHE OPTIMIZATION - START ==========
-        // 切换日历时清除缓存，因为数据来源变了
+        // Clear cache when calendar changes because data source changed
         console.log('[Calendar] Calendar changed - clearing cache');
         this.clearCache();
         // ========== CACHE OPTIMIZATION - END ==========
@@ -1507,10 +1457,10 @@ export default class PublicCalendarView extends LightningElement {
         }
         
         // ========== CACHE OPTIMIZATION - START ==========
-        // 智能检查是否需要重新获取数据
+        // Smart check if need to re-fetch data
         if (this.isCacheValid()) {
             console.log('[Navigation] Using cached data for navigation');
-            this.refreshView(); // 只刷新视图，不重新获取数据
+            this.refreshView(); // Only refresh view, don't re-fetch data
         } else {
             console.log('[Navigation] Cache invalid - fetching new data');
             this.fetchEvents();
@@ -1529,13 +1479,13 @@ export default class PublicCalendarView extends LightningElement {
         }
         
         // ========== CACHE OPTIMIZATION - START ==========
-        // 智能检查是否需要重新获取数据
+        // Smart check if need to re-fetch data
         if (this.isCacheValid()) {
             console.log('[Navigation] Using cached data for navigation');
-            this.refreshView(); // 只刷新视图，不重新获取数据
+            this.refreshView(); // Only refresh view, don't re-fetch data
         } else {
             console.log('[Navigation] Cache invalid - fetching new data');
-            this.fetchEvents();
+        this.fetchEvents();
         }
         // ========== CACHE OPTIMIZATION - END ==========
     }
@@ -1548,13 +1498,13 @@ export default class PublicCalendarView extends LightningElement {
         console.log('[Navigation] Today:', this.currentWeekStart.toDateString());
         
         // ========== CACHE OPTIMIZATION - START ==========
-        // 智能检查是否需要重新获取数据
+        // Smart check if need to re-fetch data
         if (this.isCacheValid()) {
             console.log('[Navigation] Using cached data for today navigation');
-            this.refreshView(); // 只刷新视图，不重新获取数据
+            this.refreshView(); // Only refresh view, don't re-fetch data
         } else {
             console.log('[Navigation] Cache invalid - fetching new data');
-            this.fetchEvents();
+        this.fetchEvents();
         }
         // ========== CACHE OPTIMIZATION - END ==========
     }
