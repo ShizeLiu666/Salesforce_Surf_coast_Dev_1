@@ -2271,6 +2271,9 @@ export default class PublicCalendarView extends LightningElement {
                 // 验证颜色修复效果
                 validateColorFix: () => this.validateColorFix(),
                 
+                // 诊断重叠事件问题
+                diagnoseOverlapIssue: () => this.diagnoseOverlapIssue(),
+                
                 // 获取帮助信息
                 help: () => {
                     console.log(`
@@ -2284,6 +2287,7 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.setDebugMode(true/false) - 设置调试模式
   calendarDebug.testAlgorithm(true/false) - 测试算法
   calendarDebug.validateColorFix() - 验证颜色修复效果
+  calendarDebug.diagnoseOverlapIssue() - 诊断重叠事件问题
   calendarDebug.help()            - 显示此帮助信息
 
 示例：
@@ -2291,6 +2295,7 @@ export default class PublicCalendarView extends LightningElement {
   calendarDebug.getStats()        // 查看性能统计
   calendarDebug.showEvents()      // 查看事件布局详情
   calendarDebug.validateColorFix() // 验证颜色修复效果
+  calendarDebug.diagnoseOverlapIssue() // 诊断重叠事件问题
                     `);
                 }
             };
@@ -2413,6 +2418,150 @@ export default class PublicCalendarView extends LightningElement {
         const b = parseInt(result[3], 16);
         
         return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    /**
+     * 诊断重叠事件问题
+     * 检查事件是否正确应用了并列布局
+     */
+    diagnoseOverlapIssue() {
+        console.group('[Overlap Diagnosis] 诊断重叠事件问题');
+        
+        const eventElements = this.template.querySelectorAll('.grid-positioned');
+        
+        console.log(`找到 ${eventElements.length} 个事件元素`);
+        
+        // 按天分组分析
+        const eventsByDay = {};
+        
+        eventElements.forEach((eventElement, index) => {
+            const eventId = eventElement.dataset.eventId;
+            const computedStyle = window.getComputedStyle(eventElement);
+            
+            // 查找事件数据
+            let eventData = null;
+            let dayKey = null;
+            for (const day of this.weekDays) {
+                for (const event of day.allEvents) {
+                    if (event._key === eventId) {
+                        eventData = event;
+                        dayKey = day.dateStr;
+                        break;
+                    }
+                }
+                if (eventData) break;
+            }
+            
+            if (eventData && dayKey) {
+                if (!eventsByDay[dayKey]) {
+                    eventsByDay[dayKey] = [];
+                }
+                
+                eventsByDay[dayKey].push({
+                    title: eventData.title,
+                    startTime: eventData._startTime,
+                    endTime: eventData._endTime,
+                    isOptimized: eventData._isOptimized,
+                    expectedWidth: eventData._width,
+                    expectedLeft: eventData._left,
+                    actualWidth: computedStyle.width,
+                    actualLeft: computedStyle.left,
+                    actualTop: computedStyle.top,
+                    colIndex: eventData._colIndex,
+                    maxConcurrency: eventData._maxConcurrency,
+                    position: computedStyle.position
+                });
+            }
+        });
+        
+        // 分析每天的重叠情况
+        Object.keys(eventsByDay).forEach(dayKey => {
+            const dayEvents = eventsByDay[dayKey];
+            console.log(`\n=== ${dayKey} (${dayEvents.length} 个事件) ===`);
+            
+            // 检查重叠事件
+            const overlappingGroups = this.findOverlappingEvents(dayEvents);
+            
+            overlappingGroups.forEach((group, groupIndex) => {
+                if (group.length > 1) {
+                    console.log(`\n重叠组 ${groupIndex + 1} (${group.length} 个事件):`);
+                    
+                    group.forEach((event, eventIndex) => {
+                        const startTime = new Date(event.startTime).toLocaleTimeString('en-US', {
+                            hour: 'numeric', minute: '2-digit', hour12: true
+                        });
+                        const endTime = new Date(event.endTime).toLocaleTimeString('en-US', {
+                            hour: 'numeric', minute: '2-digit', hour12: true
+                        });
+                        
+                        console.log(`  事件 ${eventIndex + 1}: "${event.title}" (${startTime} - ${endTime})`);
+                        console.log(`    优化算法: ${event.isOptimized ? '✅' : '❌'}`);
+                        console.log(`    预期宽度: ${event.expectedWidth} → 实际宽度: ${event.actualWidth}`);
+                        console.log(`    预期位置: ${event.expectedLeft} → 实际位置: ${event.actualLeft}`);
+                        console.log(`    列索引: ${event.colIndex}/${event.maxConcurrency}`);
+                        console.log(`    定位方式: ${event.position}`);
+                        
+                        // 检查是否正确并列
+                        const expectedWidthPercent = parseFloat(event.expectedWidth);
+                        const actualWidthPercent = (parseFloat(event.actualWidth) / eventElement.parentElement.clientWidth) * 100;
+                        
+                        if (Math.abs(expectedWidthPercent - actualWidthPercent) > 5) {
+                            console.log(`    ⚠️  宽度不匹配！预期 ${expectedWidthPercent}%, 实际 ${actualWidthPercent}%`);
+                        }
+                    });
+                } else {
+                    const event = group[0];
+                    const startTime = new Date(event.startTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true
+                    });
+                    const endTime = new Date(event.endTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric', minute: '2-digit', hour12: true
+                    });
+                    
+                    console.log(`\n单独事件: "${event.title}" (${startTime} - ${endTime})`);
+                    console.log(`  优化算法: ${event.isOptimized ? '✅' : '❌'}`);
+                    console.log(`  宽度: ${event.expectedWidth} → ${event.actualWidth}`);
+                    
+                    // 单独事件应该是100%宽度
+                    if (event.expectedWidth !== '100%' && event.expectedWidth !== '100.00%') {
+                        console.log(`  ⚠️  单独事件宽度不是100%: ${event.expectedWidth}`);
+                    }
+                }
+            });
+        });
+        
+        console.groupEnd();
+        return eventsByDay;
+    }
+    
+    /**
+     * 辅助函数：查找重叠事件
+     */
+    findOverlappingEvents(events) {
+        const groups = [];
+        const processed = new Set();
+        
+        events.forEach(event => {
+            if (processed.has(event.title)) return;
+            
+            const group = [event];
+            processed.add(event.title);
+            
+            // 查找与当前事件重叠的其他事件
+            events.forEach(otherEvent => {
+                if (processed.has(otherEvent.title)) return;
+                
+                // 检查时间重叠
+                if (event.startTime < otherEvent.endTime && event.endTime > otherEvent.startTime) {
+                    group.push(otherEvent);
+                    processed.add(otherEvent.title);
+                }
+            });
+            
+            groups.push(group);
+        });
+        
+        return groups;
     }
 
     formatHourLabel(hour) {
