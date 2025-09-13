@@ -249,8 +249,8 @@ export default class PublicCalendarView extends LightningElement {
     }
 
     scrollTo4AM() {
-        // Our time slots go: 5 AM (index 0), 6 AM (index 1), ..., 3 AM (index 22), 4 AM (index 23)
-        // So 4 AM is at index 23 in our time slots array
+        // Our time slots go: 5AM=slot0, 6AM=slot1, ..., 3AM=slot22, 4AM=slot23
+        // So 4AM is at slot index 23 (startHour=4 → slotIndex=4+19=23)
         const scrollPosition = 23 * this.SLOT_HEIGHT_PX;
         
         setTimeout(() => {
@@ -287,13 +287,21 @@ export default class PublicCalendarView extends LightningElement {
     // ---------- setup ----------
     buildTimeSlots() {
         const slots = [];
-        // Start at 5 AM (hour 5) and go through to 4 AM next day (hour 28, wrapping at 24)
+        // Build 24 time slots from 5AM to 4AM next day
+        // Slot 0: 5AM, Slot 1: 6AM, ..., Slot 18: 11PM, Slot 19: 12AM, ..., Slot 23: 4AM
         for (let h = 5; h < 29; h++) {
             const actualHour = h % 24; // Wrap around after 24
             const hour12 = ((actualHour + 11) % 12) + 1;
             const ampm = actualHour < 12 ? 'AM' : 'PM';
-            slots.push({ value: actualHour, label: `${hour12} ${ampm}` });
+            const slotIndex = h - 5; // This will be 0-23
+            slots.push({ 
+                value: actualHour, 
+                label: `${hour12} ${ampm}`,
+                slotIndex: slotIndex // Add slot index for debugging
+            });
         }
+        
+        console.log('[TimeSlots] Built 24 time slots:', slots.map(s => `${s.label}(slot${s.slotIndex})`));
         this.timeSlots = slots;
     }
 
@@ -1012,28 +1020,24 @@ export default class PublicCalendarView extends LightningElement {
                     const startMinutes = e._start.getMinutes();
                     
                     // ========== 24-HOUR GRID POSITION FIX - START ==========
-                    // Find which slot this hour corresponds to (5 AM = slot 1, 6 AM = slot 2, etc.)
+                    // Map hour to slot index: 5AM=0, 6AM=1, ..., 4AM=23
                     let slotIndex = -1;
-                    let matchedH = -1;
                     
-                    for (let h = 5; h < 29; h++) {
-                        const hour = h % 24;
-                        if (hour === startHour) {
-                            slotIndex = h - 5 + 1; // Convert to 1-based slot index
-                            matchedH = h;
-                            break;
-                        }
+                    if (startHour >= 5) {
+                        // Hours 5-23: normal mapping (5AM=0, 6AM=1, ..., 11PM=18)
+                        slotIndex = startHour - 5;
+                    } else {
+                        // Hours 0-4: map to end of day (12AM=19, 1AM=20, 2AM=21, 3AM=22, 4AM=23)
+                        slotIndex = startHour + 19;
                     }
                     
-                    // Validate special time points in 24-hour grid
-                    const isEarlyMorningEvent = startHour >= 0 && startHour <= 4;
-                    const isRecurringEvent = e.isRecurring || false;
+                    console.log(`[GridPosition] Event "${e.title}" at ${startHour}:${startMinutes.toString().padStart(2, '0')} → slot ${slotIndex}`);
                     
                     // ========== 24-HOUR GRID POSITION FIX - END ==========
                     
-                    if (slotIndex > 0) {
+                    if (slotIndex >= 0) {
                         // Calculate precise position within the slot
-                        topPosition = (slotIndex - 1) * 50 + (startMinutes / 60) * 50;
+                        topPosition = slotIndex * 50 + (startMinutes / 60) * 50;
                         
                         if (e._end) {
                             const durationMs = e._end.getTime() - e._start.getTime();
