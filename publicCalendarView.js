@@ -184,7 +184,6 @@ export default class PublicCalendarView extends LightningElement {
                         }) : 'N/A';
                     
                     const maxConcurrency = eventData._maxConcurrency || eventData._totalColumns || 1;
-                    const colIndex = eventData._colIndex !== undefined ? eventData._colIndex : 0;
                     
                     const layoutInfo = eventData._isDynamic ? 
                         `动态布局 | 最大并发: ${maxConcurrency} | 列: ${colIndex + 1}` :
