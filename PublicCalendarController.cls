@@ -167,7 +167,7 @@ public without sharing class PublicCalendarController {
             
             System.debug('🔍 SPLIT QUERY RESULTS:');
             System.debug('Single events found: ' + singleEvents.size());
-            System.debug('Recurring (masters + instances) found: ' + recurringMasters.size());
+            System.debug('Recurring masters found: ' + recurringMasters.size());
             System.debug('Total events combined: ' + events.size());
             
             System.debug('Main query found ' + events.size() + ' events');
@@ -189,21 +189,14 @@ public without sharing class PublicCalendarController {
             Integer recurringCount = 0;
             Integer singleCount = 0;
             for (Event evt : events) {
-                Boolean hasRecurrenceActivityId = false;
-                try {
-                    hasRecurrenceActivityId = (evt.RecurrenceActivityId != null);
-                } catch (Exception ex) {
-                    System.debug('Error accessing RecurrenceActivityId in counting loop: ' + ex.getMessage());
-                    hasRecurrenceActivityId = false;
-                }
-                
-                if ((evt.IsRecurrence2 == true) || hasRecurrenceActivityId || (evt.IsRecurrence == true)) {
+                // Since we now only get masters (RecurrenceActivityId = null), simplify the logic
+                if ((evt.IsRecurrence2 == true) || (evt.IsRecurrence == true)) {
                     recurringCount++;
                 } else {
                     singleCount++;
                 }
             }
-            System.debug('Recurring events: ' + recurringCount + ', Single events: ' + singleCount);
+            System.debug('Recurring master events: ' + recurringCount + ', Single events: ' + singleCount);
             
             // Convert to wrapper class
             List<CalendarEvent> calendarEvents = new List<CalendarEvent>();
@@ -222,7 +215,7 @@ public without sharing class PublicCalendarController {
                 calEvent.recurrencePatternText = evt.Recurrence2PatternText;
                 calEvent.isRecurringClassic = evt.IsRecurrence != null ? evt.IsRecurrence : false;
                 
-                // Safe access to RecurrenceActivityId
+                // Safe access to RecurrenceActivityId (should always be null for masters)
                 try {
                     calEvent.recurrenceActivityId = evt.RecurrenceActivityId;
                 } catch (Exception ex) {
@@ -230,9 +223,8 @@ public without sharing class PublicCalendarController {
                     calEvent.recurrenceActivityId = null;
                 }
                 
-                // NEW: consider instances as recurring if they have RecurrenceActivityId
-                Boolean hasRecurrenceActivityId = (calEvent.recurrenceActivityId != null);
-                calEvent.isRecurring = calEvent.isRecurringEnhanced || calEvent.isRecurringClassic || hasRecurrenceActivityId;
+                // FIXED: Only consider enhanced/classic flags since we only return masters
+                calEvent.isRecurring = calEvent.isRecurringEnhanced || calEvent.isRecurringClassic;
                 
                 // Handle all-day events
                 if (evt.IsAllDayEvent && evt.ActivityDate != null) {
