@@ -162,7 +162,7 @@ export default class PublicCalendarView extends LightningElement {
                     const color = colors[colorIndex];
                     eventElement.style.setProperty('background-color', color, 'important');
                     
-                    // ========== 增强hover信息 ==========
+                    // ========== Google Calendar风格布局信息 ==========
                     const startTime = eventData._startTime ? 
                         new Date(eventData._startTime).toLocaleTimeString('en-US', {
                             hour: 'numeric', minute: '2-digit', hour12: true
@@ -172,23 +172,28 @@ export default class PublicCalendarView extends LightningElement {
                             hour: 'numeric', minute: '2-digit', hour12: true
                         }) : 'N/A';
                     
-                    const hoverInfo = `${startTime} - ${endTime} | 列${eventData._colIndex + 1}/${eventData._totalColumns}${eventData._isDynamic ? ' | 动态' : ''}`;
-                    eventElement.setAttribute('data-hover-info', hoverInfo);
+                    const maxConcurrency = eventData._maxConcurrency || eventData._totalColumns || 1;
+                    const colIndex = eventData._colIndex !== undefined ? eventData._colIndex : 0;
                     
-                    // 更新title属性
-                    const titleInfo = eventData._isDynamic ? 
-                        `${eventData.title}\n时间: ${startTime} - ${endTime}\n位置: 列${eventData._colIndex + 1}/${eventData._totalColumns} (动态布局)\n簇: ${eventData._clusterIndex + 1}` :
-                        `${eventData.title}\n时间: ${startTime} - ${endTime}\n位置: 列${eventData._colIndex + 1}/${eventData._totalColumns}`;
+                    const layoutInfo = eventData._isDynamic ? 
+                        `动态布局 | 最大并发: ${maxConcurrency} | 列: ${colIndex + 1}` :
+                        `固定布局 | 并发: ${maxConcurrency} | 列: ${colIndex + 1}/${maxConcurrency}`;
+                    
+                    const titleInfo = `${eventData.title}\n时间: ${startTime} - ${endTime}\n${layoutInfo}`;
                     eventElement.setAttribute('title', titleInfo);
                     
-                    // 动态布局标识
+                    // 布局标识
+                    if (eventData._layoutType) {
+                        eventElement.setAttribute('data-layout-type', eventData._layoutType);
+                    }
+                    
                     if (eventData._isDynamic) {
                         eventElement.classList.add('dynamic-layout');
                     }
                     
-                    // 添加列数指示器（用于CSS样式选择）
-                    if (eventData._totalColumns) {
-                        eventElement.setAttribute('data-total-columns', eventData._totalColumns);
+                    // 添加并发数指示器（用于CSS样式选择）
+                    if (maxConcurrency) {
+                        eventElement.setAttribute('data-max-concurrency', maxConcurrency);
                     }
                     
                     // 调试日志
@@ -1406,7 +1411,7 @@ export default class PublicCalendarView extends LightningElement {
     // 1. 按天分桶 → 2. 切成重叠簇 → 3. 簇内列分配 → 4. 几何计算 → 5. 渲染
 
     /**
-     * 主入口：新的事件布局算法
+     * 主入口：Google Calendar风格的事件布局算法
      * @param {Array} events - 单天内的事件列表
      * @param {Object} options - 配置选项
      * @returns {Array} 处理后的事件（包含布局信息）
@@ -1419,13 +1424,12 @@ export default class PublicCalendarView extends LightningElement {
         const {
             enableDynamicFill = true,  // 是否启用动态占满空隙
             pxPerMinute = 1,          // 每分钟像素数
-            minEventHeight = 20,       // 最小事件高度
-            columnGap = 2             // 列间距
+            minEventHeight = 20       // 最小事件高度
         } = options;
 
-        console.log(`[OptimizedLayout] 开始处理 ${events.length} 个事件`);
+        console.log(`[GoogleCalendarLayout] 开始处理 ${events.length} 个事件`);
 
-        // Step 1: 数据预处理和排序
+        // Step 1: 按开始时间排序
         const sortedEvents = [...events].sort((a, b) => {
             if (a._startTime === b._startTime) {
                 return a._endTime - b._endTime; // 同时开始的，短的在前
@@ -1433,82 +1437,254 @@ export default class PublicCalendarView extends LightningElement {
             return a._startTime - b._startTime;
         });
 
-        // Step 2: 检测重叠簇（使用Union-Find算法）
-        const clusters = this.detectOverlapClusters(sortedEvents);
-        console.log(`[OptimizedLayout] 检测到 ${clusters.length} 个重叠簇`);
+        // Step 2: 计算最大并发数和列分配
+        const { maxConcurrency, columnAssignments } = this.calculateConcurrencyAndColumns(sortedEvents);
+        console.log(`[GoogleCalendarLayout] 最大并发数: ${maxConcurrency}`);
 
-        // Step 3: 对每个簇进行区间分割列分配
+        // Step 3: 计算几何信息
         const processedEvents = [];
-        let dynamicEventsCount = 0;
         
-        clusters.forEach((cluster, clusterIndex) => {
-            console.log(`[OptimizedLayout] 处理簇 ${clusterIndex + 1}/${clusters.length}，包含 ${cluster.length} 个事件`);
-            
-            if (cluster.length === 1) {
-                // 单事件簇，直接分配
-                const event = cluster[0];
-                const layoutInfo = this.calculateEventGeometry(event, {
-                    colIndex: 0,
-                    totalColumns: 1,
+        if (enableDynamicFill) {
+            // Google Calendar风格：动态占满空隙
+            processedEvents.push(...this.calculateDynamicLayoutGeometry(
+                sortedEvents, columnAssignments, maxConcurrency, { pxPerMinute, minEventHeight }
+            ));
+        } else {
+            // 固定宽度布局
+            sortedEvents.forEach((event, index) => {
+                const colIndex = columnAssignments[index];
+                const geometry = this.calculateStaticEventGeometry(event, {
+                    colIndex,
+                    maxConcurrency,
                     pxPerMinute,
-                    minEventHeight,
-                    columnGap
+                    minEventHeight
                 });
                 
                 processedEvents.push({
                     ...event,
-                    ...layoutInfo,
-                    _clusterIndex: clusterIndex,
-                    _isOptimized: true
+                    ...geometry,
+                    _isOptimized: true,
+                    _layoutType: 'static'
                 });
-            } else {
-                // 多事件簇，使用区间分割算法
-                const clusterLayout = this.assignColumnsWithIntervalPartitioning(
-                    cluster, { enableDynamicFill, pxPerMinute, minEventHeight, columnGap }
-                );
-                
-                clusterLayout.forEach(eventLayout => {
-                    processedEvents.push({
-                        ...eventLayout,
-                        _clusterIndex: clusterIndex,
-                        _isOptimized: true
-                    });
-                    
-                    if (eventLayout._isDynamic) {
-                        dynamicEventsCount++;
-                    }
-                });
-            }
-        });
+            });
+        }
 
         // 性能统计
         const endTime = performance.now();
         const layoutTime = Math.round(endTime - startTime);
-        const averageClusterSize = clusters.length > 0 ? 
-            Math.round(events.length / clusters.length * 10) / 10 : 0;
 
-        // 更新性能统计
         this.performanceStats = {
             lastLayoutTime: layoutTime,
             totalEvents: events.length,
-            totalClusters: clusters.length,
-            averageClusterSize: averageClusterSize,
-            dynamicEventsCount: dynamicEventsCount
+            maxConcurrency: maxConcurrency,
+            dynamicEventsCount: processedEvents.filter(e => e._isDynamic).length
         };
 
-        console.log(`[OptimizedLayout] 完成，输出 ${processedEvents.length} 个布局事件`);
-        console.log(`[Performance] 布局耗时: ${layoutTime}ms, 平均簇大小: ${averageClusterSize}, 动态事件: ${dynamicEventsCount}/${events.length}`);
-        
-        // 调试模式下输出详细信息
-        if (this.debugMode) {
-            this.logDetailedDebugInfo(clusters, processedEvents);
-        }
+        console.log(`[GoogleCalendarLayout] 完成，输出 ${processedEvents.length} 个布局事件`);
+        console.log(`[Performance] 布局耗时: ${layoutTime}ms, 最大并发: ${maxConcurrency}`);
         
         return processedEvents;
     }
 
     /**
-     * 检测重叠簇 - 使用Union-Find算法
+     * 计算最大并发数和列分配（Google Calendar风格）
+     * @param {Array} sortedEvents - 按开始时间排序的事件
+     * @returns {Object} { maxConcurrency, columnAssignments }
+     */
+    calculateConcurrencyAndColumns(sortedEvents) {
+        if (sortedEvents.length === 0) {
+            return { maxConcurrency: 0, columnAssignments: [] };
+        }
+
+        const columnAssignments = new Array(sortedEvents.length);
+        const columnEndTimes = []; // 每列的结束时间
+        let maxConcurrency = 0;
+
+        sortedEvents.forEach((event, eventIndex) => {
+            // 找到第一个可用的列（结束时间 <= 当前事件开始时间）
+            let assignedColumn = -1;
+            
+            for (let col = 0; col < columnEndTimes.length; col++) {
+                if (columnEndTimes[col] <= event._startTime) {
+                    assignedColumn = col;
+                    break;
+                }
+            }
+
+            // 如果没有可用列，创建新列
+            if (assignedColumn === -1) {
+                assignedColumn = columnEndTimes.length;
+                columnEndTimes.push(0);
+            }
+
+            // 分配列并更新结束时间
+            columnAssignments[eventIndex] = assignedColumn;
+            columnEndTimes[assignedColumn] = event._endTime;
+
+            // 更新最大并发数
+            const currentConcurrency = columnEndTimes.filter(endTime => endTime > event._startTime).length;
+            maxConcurrency = Math.max(maxConcurrency, currentConcurrency);
+        });
+
+        console.log(`[ConcurrencyCalc] 分配结果: 最大并发=${maxConcurrency}, 总列数=${columnEndTimes.length}`);
+        
+        return { maxConcurrency, columnAssignments };
+    }
+
+    /**
+     * 计算静态布局几何信息
+     * @param {Object} event - 事件对象
+     * @param {Object} params - 参数
+     * @returns {Object} 几何信息
+     */
+    calculateStaticEventGeometry(event, params) {
+        const { colIndex, maxConcurrency, pxPerMinute, minEventHeight } = params;
+
+        // 时间到像素
+        const startMinutes = this.timeToMinutes(new Date(event._startTime));
+        const endMinutes = this.timeToMinutes(new Date(event._endTime));
+        const top = startMinutes * pxPerMinute;
+        const height = Math.max(minEventHeight, (endMinutes - startMinutes) * pxPerMinute);
+
+        // 根据最大并发数计算宽度和位置
+        const width = (100 / maxConcurrency).toFixed(2); // 百分比
+        const left = (colIndex * 100 / maxConcurrency).toFixed(2); // 百分比
+
+        return {
+            _top: top,
+            _height: height,
+            _width: `${width}%`,
+            _left: `${left}%`,
+            _colIndex: colIndex,
+            _maxConcurrency: maxConcurrency,
+            _layoutType: 'static'
+        };
+    }
+
+    /**
+     * 计算动态布局几何信息（Google Calendar风格）
+     * @param {Array} sortedEvents - 排序后的事件
+     * @param {Array} columnAssignments - 列分配
+     * @param {number} maxConcurrency - 最大并发数
+     * @param {Object} options - 选项
+     * @returns {Array} 几何信息数组
+     */
+    calculateDynamicLayoutGeometry(sortedEvents, columnAssignments, maxConcurrency, options) {
+        const { pxPerMinute, minEventHeight } = options;
+        const results = [];
+
+        // Step 1: 收集所有时间点，创建时间段
+        const timePoints = new Set();
+        sortedEvents.forEach(event => {
+            timePoints.add(event._startTime);
+            timePoints.add(event._endTime);
+        });
+
+        const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
+        console.log(`[DynamicLayout] 时间分割点: ${sortedTimePoints.length} 个`);
+
+        // Step 2: 为每个时间段计算活跃事件和实际并发数
+        const timeSegments = [];
+        for (let i = 0; i < sortedTimePoints.length - 1; i++) {
+            const segmentStart = sortedTimePoints[i];
+            const segmentEnd = sortedTimePoints[i + 1];
+
+            // 找到在此时间段内活跃的事件
+            const activeEventIndices = [];
+            sortedEvents.forEach((event, index) => {
+                if (event._startTime < segmentEnd && event._endTime > segmentStart) {
+                    activeEventIndices.push(index);
+                }
+            });
+
+            if (activeEventIndices.length > 0) {
+                // 计算这些活跃事件的列分布
+                const activeColumns = activeEventIndices.map(index => columnAssignments[index]);
+                const uniqueColumns = [...new Set(activeColumns)].sort((a, b) => a - b);
+                
+                timeSegments.push({
+                    start: segmentStart,
+                    end: segmentEnd,
+                    activeEventIndices,
+                    activeColumns: uniqueColumns,
+                    actualConcurrency: uniqueColumns.length
+                });
+            }
+        }
+
+        // Step 3: 为每个事件计算动态几何
+        sortedEvents.forEach((event, eventIndex) => {
+            const colIndex = columnAssignments[eventIndex];
+            
+            // 找到事件覆盖的所有时间段
+            const eventSegments = timeSegments.filter(segment => 
+                event._startTime < segment.end && event._endTime > segment.start
+            );
+
+            if (eventSegments.length === 0) {
+                // 回退到静态布局
+                const geometry = this.calculateStaticEventGeometry(event, {
+                    colIndex, maxConcurrency, pxPerMinute, minEventHeight
+                });
+                results.push({ ...event, ...geometry });
+                return;
+            }
+
+            // 计算加权平均的宽度和位置
+            let totalWeight = 0;
+            let weightedWidth = 0;
+            let weightedLeft = 0;
+
+            eventSegments.forEach(segment => {
+                const segmentDuration = segment.end - segment.start;
+                const eventStartInSegment = Math.max(event._startTime, segment.start);
+                const eventEndInSegment = Math.min(event._endTime, segment.end);
+                const eventDurationInSegment = eventEndInSegment - eventStartInSegment;
+                
+                if (eventDurationInSegment > 0) {
+                    const weight = eventDurationInSegment;
+                    
+                    // 在该时间段内，重新映射列索引
+                    const columnIndexInSegment = segment.activeColumns.indexOf(colIndex);
+                    const segmentWidth = 100 / segment.actualConcurrency;
+                    const segmentLeft = columnIndexInSegment * segmentWidth;
+                    
+                    weightedWidth += segmentWidth * weight;
+                    weightedLeft += segmentLeft * weight;
+                    totalWeight += weight;
+                }
+            });
+
+            // 计算最终的几何信息
+            const finalWidth = totalWeight > 0 ? weightedWidth / totalWeight : (100 / maxConcurrency);
+            const finalLeft = totalWeight > 0 ? weightedLeft / totalWeight : (colIndex * 100 / maxConcurrency);
+
+            const startMinutes = this.timeToMinutes(new Date(event._startTime));
+            const endMinutes = this.timeToMinutes(new Date(event._endTime));
+            const top = startMinutes * pxPerMinute;
+            const height = Math.max(minEventHeight, (endMinutes - startMinutes) * pxPerMinute);
+
+            results.push({
+                ...event,
+                _top: top,
+                _height: height,
+                _width: `${finalWidth.toFixed(2)}%`,
+                _left: `${finalLeft.toFixed(2)}%`,
+                _colIndex: colIndex,
+                _maxConcurrency: maxConcurrency,
+                _isDynamic: eventSegments.length > 1,
+                _segmentCount: eventSegments.length,
+                _layoutType: 'dynamic',
+                _isOptimized: true
+            });
+        });
+
+        console.log(`[DynamicLayout] 完成，${results.filter(e => e._isDynamic).length}/${results.length} 个动态事件`);
+        return results;
+    }
+
+    /**
+     * 检测重叠簇 - 使用Union-Find算法（保留用于兼容）
      * @param {Array} sortedEvents - 按开始时间排序的事件
      * @returns {Array} 簇数组，每个簇包含重叠的事件
      */
@@ -1994,50 +2170,88 @@ export default class PublicCalendarView extends LightningElement {
                     this.buildWeekView();
                 },
                 
-                // 测试极端重叠场景
-                testExtremeOverlap: () => {
-                    console.log('[Debug] 创建极端重叠测试场景...');
+                // 测试Google Calendar风格的典型场景
+                testGoogleCalendarLayout: () => {
+                    console.log('[Debug] 测试Google Calendar风格布局...');
                     
-                    // 创建测试数据：同一时间段的多个事件
-                    const testDate = new Date();
-                    testDate.setHours(10, 0, 0, 0); // 10:00 AM
+                    const baseTime = new Date();
+                    baseTime.setHours(9, 0, 0, 0); // 9:00 AM
                     
-                    const testEvents = [];
-                    for (let i = 0; i < 8; i++) {
-                        const startTime = new Date(testDate.getTime() + i * 15 * 60 * 1000); // 每15分钟开始一个
-                        const endTime = new Date(startTime.getTime() + (60 + i * 10) * 60 * 1000); // 持续1-2.2小时
+                    const testEvents = [
+                        // 场景1: 两个重叠事件 (应该各占50%宽度)
+                        {
+                            id: 'test-1', title: '会议A (9-10)', 
+                            _startTime: baseTime.getTime(), 
+                            _endTime: baseTime.getTime() + 60*60*1000,
+                            _key: 'test-1'
+                        },
+                        {
+                            id: 'test-2', title: '会议B (9:30-10:30)', 
+                            _startTime: baseTime.getTime() + 30*60*1000, 
+                            _endTime: baseTime.getTime() + 90*60*1000,
+                            _key: 'test-2'
+                        },
                         
-                        testEvents.push({
-                            id: `test-${i}`,
-                            title: `测试事件 ${i + 1}`,
-                            _start: startTime,
-                            _end: endTime,
-                            _startTime: startTime.getTime(),
-                            _endTime: endTime.getTime(),
-                            _key: `test-event-${i}`,
-                            isRecurring: false
-                        });
-                    }
+                        // 场景2: 三个重叠事件 (应该各占33.33%宽度)
+                        {
+                            id: 'test-3', title: '会议C (11-12)', 
+                            _startTime: baseTime.getTime() + 2*60*60*1000, 
+                            _endTime: baseTime.getTime() + 3*60*60*1000,
+                            _key: 'test-3'
+                        },
+                        {
+                            id: 'test-4', title: '会议D (11:15-12:15)', 
+                            _startTime: baseTime.getTime() + 2.25*60*60*1000, 
+                            _endTime: baseTime.getTime() + 3.25*60*60*1000,
+                            _key: 'test-4'
+                        },
+                        {
+                            id: 'test-5', title: '会议E (11:30-12:30)', 
+                            _startTime: baseTime.getTime() + 2.5*60*60*1000, 
+                            _endTime: baseTime.getTime() + 3.5*60*60*1000,
+                            _key: 'test-5'
+                        },
+                        
+                        // 场景3: 单独事件 (应该占100%宽度)
+                        {
+                            id: 'test-6', title: '单独会议 (14-15)', 
+                            _startTime: baseTime.getTime() + 5*60*60*1000, 
+                            _endTime: baseTime.getTime() + 6*60*60*1000,
+                            _key: 'test-6'
+                        }
+                    ];
                     
-                    // 测试算法
-                    const layoutResult = this.calculateOptimizedEventLayout(testEvents, {
-                        enableDynamicFill: true,
+                    // 测试静态布局
+                    console.group('[TestStatic] 静态布局测试');
+                    const staticResult = this.calculateOptimizedEventLayout(testEvents, {
+                        enableDynamicFill: false,
                         pxPerMinute: 50/60,
-                        minEventHeight: 30,
-                        columnGap: 4
+                        minEventHeight: 30
                     });
-                    
-                    console.group('[TestResult] 极端重叠场景测试结果');
-                    console.log(`输入事件数: ${testEvents.length}`);
-                    console.log(`输出布局数: ${layoutResult.length}`);
-                    console.log(`性能统计:`, this.getPerformanceStats());
-                    console.log('布局详情:');
-                    layoutResult.forEach(event => {
-                        console.log(`  "${event.title}": 列${event._colIndex}/${event._totalColumns}, 宽度${event._width}, 位置${event._left}`);
-                    });
+                    this.logLayoutResults(staticResult, '静态');
                     console.groupEnd();
                     
-                    return layoutResult;
+                    // 测试动态布局
+                    console.group('[TestDynamic] 动态布局测试');
+                    const dynamicResult = this.calculateOptimizedEventLayout(testEvents, {
+                        enableDynamicFill: true,
+                        pxPerMinute: 50/60,
+                        minEventHeight: 30
+                    });
+                    this.logLayoutResults(dynamicResult, '动态');
+                    console.groupEnd();
+                    
+                    return { static: staticResult, dynamic: dynamicResult };
+                },
+                
+                // 日志布局结果的辅助函数
+                logLayoutResults: (results, type) => {
+                    console.log(`=== ${type}布局结果 ===`);
+                    results.forEach(event => {
+                        const concurrent = event._maxConcurrency || 1;
+                        const colIndex = event._colIndex || 0;
+                        console.log(`"${event.title}": 宽度=${event._width}, 位置=${event._left}, 列=${colIndex+1}/${concurrent}${event._isDynamic ? ' (动态)' : ''}`);
+                    });
                 },
                 
                 // 获取帮助信息

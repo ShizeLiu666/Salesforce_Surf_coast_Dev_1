@@ -827,18 +827,99 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* 多列布局指示器（可选视觉增强） */
-.event-block.grid-positioned[data-total-columns] {
-    border-top: 2px solid rgba(255, 255, 255, 0.6);
+/* ========== Google Calendar风格布局指示器 ========== */
+
+/* 并发数指示器 */
+.event-block.grid-positioned[data-max-concurrency] {
+    border-top: 2px solid rgba(255, 255, 255, 0.8);
 }
 
-.event-block.grid-positioned[data-total-columns="2"] { border-top-color: #22c55e; }
-.event-block.grid-positioned[data-total-columns="3"] { border-top-color: #f59e0b; }
-.event-block.grid-positioned[data-total-columns="4"] { border-top-color: #ef4444; }
-.event-block.grid-positioned[data-total-columns="5"] { border-top-color: #8b5cf6; }
-.event-block.grid-positioned[data-total-columns="6"] { border-top-color: #06b6d4; }
-.event-block.grid-positioned[data-total-columns="7"] { border-top-color: #ec4899; }
-.event-block.grid-positioned[data-total-columns="8"] { border-top-color: #84cc16; }
+.event-block.grid-positioned[data-max-concurrency="1"] { border-top-color: #10b981; } /* 单事件 - 绿色 */
+.event-block.grid-positioned[data-max-concurrency="2"] { border-top-color: #3b82f6; } /* 双并发 - 蓝色 */
+.event-block.grid-positioned[data-max-concurrency="3"] { border-top-color: #f59e0b; } /* 三并发 - 橙色 */
+.event-block.grid-positioned[data-max-concurrency="4"] { border-top-color: #ef4444; } /* 四并发 - 红色 */
+.event-block.grid-positioned[data-max-concurrency="5"] { border-top-color: #8b5cf6; } /* 五并发 - 紫色 */
+.event-block.grid-positioned[data-max-concurrency="6"] { border-top-color: #06b6d4; } /* 六并发 - 青色 */
+.event-block.grid-positioned[data-max-concurrency="7"] { border-top-color: #ec4899; } /* 七并发 - 粉色 */
+.event-block.grid-positioned[data-max-concurrency="8"] { border-top-color: #84cc16; } /* 八并发 - 亮绿 */
+
+/* 布局类型指示器 */
+.event-block.grid-positioned[data-layout-type="dynamic"] {
+    border-left: 3px solid rgba(34, 197, 94, 0.8); /* 动态布局 - 绿色左边框 */
+}
+
+.event-block.grid-positioned[data-layout-type="static"] {
+    border-left: 1px solid rgba(156, 163, 175, 0.6); /* 静态布局 - 灰色左边框 */
+}
+
+/* 根据宽度百分比优化显示 */
+.event-block.grid-positioned[style*="width: 100%"] {
+    /* 全宽事件 */
+    font-weight: 600;
+}
+
+.event-block.grid-positioned[style*="width: 50."] {
+    /* 半宽事件（2并发） */
+    font-size: 10px;
+}
+
+.event-block.grid-positioned[style*="width: 33."] {
+    /* 三分之一宽事件（3并发） */
+    font-size: 9px;
+    padding: 2px 3px;
+}
+
+.event-block.grid-positioned[style*="width: 25."] {
+    /* 四分之一宽事件（4并发） */
+    font-size: 8px;
+    padding: 1px 2px;
+}
+
+.event-block.grid-positioned[style*="width: 20."],
+.event-block.grid-positioned[style*="width: 16."],
+.event-block.grid-positioned[style*="width: 14."],
+.event-block.grid-positioned[style*="width: 12."] {
+    /* 高并发事件（5+并发） */
+    font-size: 7px;
+    padding: 1px 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.event-block.grid-positioned[style*="width: 20."] .event-time,
+.event-block.grid-positioned[style*="width: 16."] .event-time,
+.event-block.grid-positioned[style*="width: 14."] .event-time,
+.event-block.grid-positioned[style*="width: 12."] .event-time {
+    display: none; /* 高并发时隐藏时间，只显示标题 */
+}
+
+.event-block.grid-positioned[style*="width: 20."] .event-title,
+.event-block.grid-positioned[style*="width: 16."] .event-title,
+.event-block.grid-positioned[style*="width: 14."] .event-title,
+.event-block.grid-positioned[style*="width: 12."] .event-title {
+    font-size: 6px;
+    line-height: 1.1;
+    font-weight: 600;
+    text-align: center;
+    margin: 0;
+}
+
+/* 动态布局事件的增强效果 */
+.event-block.grid-positioned.dynamic-layout {
+    background: linear-gradient(135deg, currentColor 0%, currentColor 85%, rgba(34, 197, 94, 0.3) 85%, rgba(34, 197, 94, 0.3) 100%);
+    position: relative;
+}
+
+.event-block.grid-positioned.dynamic-layout::after {
+    content: '🔄';
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    font-size: 8px;
+    opacity: 0.7;
+}
 
 /* 调试模式样式 */
 .debug-mode .event-block.grid-positioned {
